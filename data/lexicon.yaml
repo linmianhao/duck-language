@@ -1,0 +1,334 @@
+# 嘎语核心词典
+# duck: 鸭语写法；gloss: 中文释义；pos: 词性；frame: 可选语义角色
+# pos 取值：pron / n / v / stative / q / num / quant / neg / particle / aspect / postp / interj
+
+# 代词
+- duck: ma
+  gloss: [我, 自己, 本人]
+  pos: pron
+- duck: na
+  gloss: [你, 您]
+  pos: pron
+- duck: ta
+  gloss: [他, 她, 它, 那, 那个]
+  pos: pron
+- duck: ti
+  gloss: [这, 这个, 这里, 这儿]
+  pos: pron
+- duck: mama
+  gloss: [我们, 咱们]
+  pos: pron
+- duck: nana
+  gloss: [你们]
+  pos: pron
+- duck: tata
+  gloss: [他们, 她们, 它们]
+  pos: pron
+
+# 名词
+- duck: kwa
+  gloss: [鸭, 鸭子, 同类]
+  pos: n
+- duck: pi
+  gloss: [小鸭, 孩子, 宝宝, 幼崽]
+  pos: n
+- duck: wa
+  gloss: [水, 河, 湖, 池塘, 水边, 河边]
+  pos: n
+- duck: mam
+  gloss: [食物, 饭, 东西, 吃的]
+  pos: n
+- duck: nu
+  gloss: [家, 窝, 巢, 房子, 家里, 窝里]
+  pos: n
+- duck: ʔo
+  gloss: [太阳, 天, 白天, 天气, 天上]
+  pos: n
+- duck: ʔum
+  gloss: [睡, 睡觉, 睡眠]
+  pos: v
+- duck: ʔam
+  gloss: [嘴, 喙]
+  pos: n
+- duck: ʔin
+  gloss: [声音, 声]
+  pos: n
+- duck: mik
+  gloss: [朋友, 同伴]
+  pos: n
+- duck: ʔu-kwa
+  gloss: [人, 人类]
+  pos: n
+- duck: wa-nu
+  gloss: [池塘, 湖, 水塘]
+  pos: n
+- duck: kak-pi
+  gloss: [捕食者, 坏蛋]
+  pos: n
+- duck: ʔo-wa
+  gloss: [雨]
+  pos: n
+- duck: ʔo-ʔu
+  gloss: [黑夜, 晚上, 夜晚]
+  pos: n
+- duck: ʔo-ba
+  gloss: [明天]
+  pos: n
+- duck: ʔo-ko
+  gloss: [昨天]
+  pos: n
+- duck: ti-ʔo
+  gloss: [今天]
+  pos: n
+
+# 动词
+- duck: num
+  gloss: [吃, 喝, 啃]
+  pos: v
+  frame: [agent, patient]
+- duck: ba
+  gloss: [去, 来, 走, 跑, 飞, 回, 到]
+  pos: v
+  frame: [agent, goal]
+- duck: ʔi
+  gloss: [要, 想, 想要, 需要]
+  pos: v
+  frame: [agent, patient]
+- duck: wi
+  gloss: [喜欢, 爱]
+  pos: v
+  frame: [agent, patient]
+- duck: ʔuk
+  gloss: [讨厌, 恨]
+  pos: v
+  frame: [agent, patient]
+- duck: pik
+  gloss: [看, 见, 看见]
+  pos: v
+  frame: [agent, patient]
+- duck: tak
+  gloss: [听, 听见, 闻]
+  pos: v
+  frame: [agent, patient]
+- duck: kwaʔ
+  gloss: [说, 叫, 喊, 话, 语言]
+  pos: v
+  frame: [agent, patient]
+- duck: mwa
+  gloss: [亲, 抱, 贴贴, 谢谢]
+  pos: v
+  frame: [agent, patient]
+- duck: ʔwa
+  gloss: [游泳, 游]
+  pos: v
+- duck: kan
+  gloss: [能, 可以, 会]
+  pos: v
+- duck: ʔo-wa
+  gloss: [下雨]
+  pos: v
+
+# 状态词 / 形容词
+- duck: wi
+  gloss: [好, 舒服, 开心, 快乐, 乖, 好吃, 好玩]
+  pos: stative
+- duck: ʔuk
+  gloss: [坏, 疼, 痛, 难过, 伤心, 害怕, 不好]
+  pos: stative
+- duck: pim
+  gloss: [冷, 凉]
+  pos: stative
+- duck: wam
+  gloss: [暖, 热, 暖和]
+  pos: stative
+- duck: kak
+  gloss: [危险, 可怕]
+  pos: stative
+- duck: po
+  gloss: [大]
+  pos: stative
+- duck: pi
+  gloss: [小, 少]
+  pos: stative
+- duck: mam ʔi
+  gloss: [饿, 饥饿]
+  pos: stative
+- duck: wa ʔi
+  gloss: [渴, 口渴]
+  pos: stative
+- duck: ʔum ʔi
+  gloss: [累, 困, 疲倦]
+  pos: stative
+
+# 疑问词
+- duck: ʔa
+  gloss: [什么, 哪个, 哪]
+  pos: q
+- duck: ʔa-kwa
+  gloss: [谁]
+  pos: q
+- duck: ʔa-ki
+  gloss: [哪里, 哪儿]
+  pos: q
+- duck: ʔa-ʔo
+  gloss: [什么时候, 何时]
+  pos: q
+- duck: ʔa-ʔok
+  gloss: [多少, 几]
+  pos: q
+- duck: ʔa-ba
+  gloss: [怎么, 怎样]
+  pos: q
+
+# 数量
+- duck: ʔok
+  gloss: [一, 1, 一个]
+  pos: num
+- duck: ʔok-ʔok
+  gloss: [二, 两, 2]
+  pos: num
+- duck: ʔok-ʔok-ʔok
+  gloss: [三, 3]
+  pos: num
+- duck: kakaka
+  gloss: [很多, 许多, 好多, 四, 五, 六, 七, 八, 九, 十]
+  pos: quant
+
+# 功能词
+- duck: ʔu
+  gloss: [不, 没, 没有, 别, 不要]
+  pos: neg
+- duck: ha
+  gloss: [吗, 呢, 么]
+  pos: particle
+- duck: ko
+  gloss: [了, 过, 已经]
+  pos: aspect
+- duck: ki
+  gloss: [在, 于, 里, 中]
+  pos: postp
+- duck: m
+  gloss: [是, 对, 嗯]
+  pos: interj
+
+# 扩展日常词
+- duck: pa
+  gloss: [爸爸, 父亲]
+  pos: n
+- duck: mim
+  gloss: [妈妈, 母亲]
+  pos: n
+- duck: kik
+  gloss: [哥哥, 姐姐, 哥哥姐姐]
+  pos: n
+- duck: tok
+  gloss: [头, 脑袋]
+  pos: n
+- duck: tuk
+  gloss: [脚, 爪子]
+  pos: n
+- duck: pak
+  gloss: [翅膀, 翼]
+  pos: n
+- duck: pum
+  gloss: [羽毛, 毛]
+  pos: n
+- duck: pun
+  gloss: [尾巴]
+  pos: n
+- duck: pik
+  gloss: [眼睛]
+  pos: n
+- duck: kum
+  gloss: [云, 云朵]
+  pos: n
+- duck: hu
+  gloss: [风]
+  pos: n
+- duck: tam
+  gloss: [树, 树木]
+  pos: n
+- duck: ʔak
+  gloss: [草, 草地]
+  pos: n
+- duck: pwa
+  gloss: [花, 花朵]
+  pos: n
+- duck: kuk
+  gloss: [石头, 石]
+  pos: n
+- duck: muk
+  gloss: [泥, 泥巴]
+  pos: n
+- duck: nam
+  gloss: [鱼]
+  pos: n
+- duck: tik
+  gloss: [虫, 虫子]
+  pos: n
+- duck: kok
+  gloss: [蛋, 蛋蛋]
+  pos: n
+- duck: ban
+  gloss: [路, 道路]
+  pos: n
+- duck: wan
+  gloss: [岸边, 岸]
+  pos: n
+- duck: ʔon
+  gloss: [天空, 空中]
+  pos: n
+- duck: nim
+  gloss: [名字]
+  pos: n
+- duck: mum
+  gloss: [味道, 气味]
+  pos: n
+- duck: tim
+  gloss: [地方, 地点]
+  pos: n
+- duck: ʔan
+  gloss: [找, 寻找]
+  pos: v
+- duck: wa
+  gloss: [洗, 洗澡]
+  pos: v
+- duck: ʔo
+  gloss: [干, 亮, 黄]
+  pos: stative
+- duck: ʔo-ʔu
+  gloss: [黑, 暗]
+  pos: stative
+- duck: ʔik
+  gloss: [绿]
+  pos: stative
+- duck: muk
+  gloss: [湿]
+  pos: stative
+- duck: wa
+  gloss: [蓝]
+  pos: stative
+- duck: kak
+  gloss: [红]
+  pos: stative
+- duck: ʔuk
+  gloss: [脏]
+  pos: stative
+- duck: wi
+  gloss: [干净, 可爱, 好听, 好玩]
+  pos: stative
+- duck: bam
+  gloss: [快, 迅速]
+  pos: stative
+- duck: ʔun
+  gloss: [慢, 缓慢]
+  pos: stative
+- duck: tan
+  gloss: [远]
+  pos: stative
+- duck: tin
+  gloss: [近]
+  pos: stative
+- duck: hwa
+  gloss: [白, 白色]
+  pos: stative

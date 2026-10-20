@@ -1,0 +1,290 @@
+# 高频整句。匹配时忽略标点和空格。
+# zh 可以是字符串或字符串列表；gloss 与 duck 的空格分词一一对应。
+- zh: [你好, 您好, 嗨, 哈喽]
+  duck: na wi ha?
+  gloss: [你, 好, 吗]
+  emotion: question
+- zh: [早上好, 早安]
+  duck: ʔo wi
+  gloss: [太阳, 好]
+  emotion: soft
+- zh: [晚安, 睡个好觉]
+  duck: ʔum wi
+  gloss: [睡, 好]
+  emotion: soft
+- zh: 谢谢
+  duck: mwa
+  gloss: [贴贴]
+  emotion: soft
+- zh: [谢谢你, 多谢]
+  duck: na mwa
+  gloss: [你, 贴贴]
+  emotion: soft
+- zh: [对不起, 抱歉]
+  duck: ma ʔuk
+  gloss: [我, 坏]
+  emotion: soft
+- zh: [没关系, 没事]
+  duck: ʔu
+  gloss: [不]
+  emotion: neutral
+- zh: [再见, 拜拜]
+  duck: ma ba
+  gloss: [我, 去]
+  emotion: neutral
+- zh: [我饿了, 我饿]
+  duck: ma mam ʔi
+  gloss: [我, 食物, 要]
+  emotion: neutral
+- zh: [我渴了, 我渴]
+  duck: ma wa ʔi
+  gloss: [我, 水, 要]
+  emotion: neutral
+- zh: [我累了, 我困了]
+  duck: ma ʔum ʔi
+  gloss: [我, 睡, 要]
+  emotion: neutral
+- zh: [我爱你, 我喜欢你]
+  duck: ma na wi
+  gloss: [我, 你, 喜欢]
+  emotion: soft
+- zh: 我想你
+  duck: ma na ʔi
+  gloss: [我, 你, 要]
+  emotion: soft
+- zh: [你好吗, 你还好吗]
+  duck: na wi ha?
+  gloss: [你, 好, 吗]
+  emotion: question
+- zh: [我很好, 我没事]
+  duck: ma wi
+  gloss: [我, 好]
+  emotion: neutral
+- zh: [你吃了吗, 你吃饭了吗]
+  duck: na num ko ha?
+  gloss: [你, 吃, 了, 吗]
+  emotion: question
+- zh: [我吃了, 我吃过了]
+  duck: ma num ko
+  gloss: [我, 吃, 了]
+  emotion: neutral
+- zh: [我要吃饭, 我想吃饭]
+  duck: ma mam ʔi
+  gloss: [我, 食物, 要]
+  emotion: neutral
+- zh: [我们去水边, 我们去河边]
+  duck: mama wa ki ba
+  gloss: [我们, 水, 在, 去]
+  emotion: neutral
+- zh: [回家, 回家吧]
+  duck: nu ki ba
+  gloss: [家, 在, 去]
+  emotion: neutral
+- zh: [睡觉, 睡觉吧]
+  duck: ʔum ba
+  gloss: [睡, 去]
+  emotion: soft
+- zh: [危险, 危险了]
+  duck: kak!
+  gloss: [危险]
+  emotion: alarm
+- zh: [救命, 救命啊]
+  duck: kak! kak!
+  gloss: [危险, 危险]
+  emotion: alarm
+- zh: [小心, 注意]
+  duck: kak
+  gloss: [危险]
+  emotion: alarm
+- zh: [下雨了]
+  duck: ʔo-wa ko
+  gloss: [雨, 了]
+  emotion: neutral
+- zh: [明天见]
+  duck: ʔo-ba na pik
+  gloss: [明天, 你, 看]
+  emotion: soft
+- zh: [今天天气好, 今天天气不错]
+  duck: ti-ʔo wi
+  gloss: [今天, 好]
+  emotion: neutral
+- zh: [这里很危险, 这里危险]
+  duck: ti kak
+  gloss: [这里, 危险]
+  emotion: alarm
+- zh: [那里有食物]
+  duck: ta mam
+  gloss: [那里, 食物]
+  emotion: neutral
+- zh: [你是谁]
+  duck: na ʔa-kwa ha?
+  gloss: [你, 谁, 吗]
+  emotion: question
+- zh: [这是什么]
+  duck: ti ʔa ha?
+  gloss: [这, 什么, 吗]
+  emotion: question
+- zh: [你去哪里, 你去哪儿]
+  duck: na ʔa-ki ba ha?
+  gloss: [你, 哪里, 去, 吗]
+  emotion: question
+- zh: [为什么, 为什么呀]
+  duck: ʔi ha?
+  gloss: [要, 吗]
+  emotion: question
+- zh: [天黑了, 晚上了]
+  duck: ʔo ʔu ko
+  gloss: [太阳, 不, 了]
+  emotion: neutral
+- zh: [我冷, 我很冷]
+  duck: ma pim
+  gloss: [我, 冷]
+  emotion: neutral
+- zh: [我热, 我很热]
+  duck: ma wam
+  gloss: [我, 热]
+  emotion: neutral
+- zh: [我不冷]
+  duck: ma ʔu pim
+  gloss: [我, 不, 冷]
+  emotion: neutral
+- zh: [我害怕]
+  duck: ma kak
+  gloss: [我, 危险]
+  emotion: soft
+- zh: [我讨厌你]
+  duck: ma na ʔuk
+  gloss: [我, 你, 讨厌]
+  emotion: alarm
+- zh: [我想吃]
+  duck: ma num ba
+  gloss: [我, 吃, 将]
+  emotion: neutral
+- zh: [我想喝水]
+  duck: ma wa num ba
+  gloss: [我, 水, 喝, 将]
+  emotion: neutral
+- zh: [你会游泳吗]
+  duck: na ʔwa kan ha?
+  gloss: [你, 游泳, 能, 吗]
+  emotion: question
+- zh: [别去]
+  duck: ʔu ba
+  gloss: [不, 去]
+  emotion: alarm
+- zh: [不要]
+  duck: ʔu
+  gloss: [不]
+  emotion: alarm
+- zh: [好]
+  duck: wi
+  gloss: [好]
+  emotion: soft
+- zh: [不好]
+  duck: ʔu wi
+  gloss: [不, 好]
+  emotion: neutral
+- zh: [是]
+  duck: m
+  gloss: [是]
+  emotion: neutral
+- zh: [不是]
+  duck: ʔu
+  gloss: [不]
+  emotion: neutral
+- zh: [我找食物, 我去找吃的]
+  duck: ma mam ʔan
+  gloss: [我, 食物, 找]
+  emotion: neutral
+- zh: [鱼在水里]
+  duck: nam wa ki
+  gloss: [鱼, 水, 在]
+  emotion: neutral
+- zh: [花好看, 花很漂亮]
+  duck: pwa wi
+  gloss: [花, 好]
+  emotion: soft
+- zh: [我爸爸是鸭]
+  duck: ma pa kwa
+  gloss: [我, 爸爸, 鸭]
+  emotion: neutral
+- zh: [我妈妈是鸭]
+  duck: ma mim kwa
+  gloss: [我, 妈妈, 鸭]
+  emotion: neutral
+- zh: [天上有云]
+  duck: ʔon kum
+  gloss: [天空, 云]
+  emotion: neutral
+- zh: [风很大]
+  duck: hu po
+  gloss: [风, 大]
+  emotion: neutral
+- zh: [我很快]
+  duck: ma bam
+  gloss: [我, 快]
+  emotion: neutral
+- zh: [路很远]
+  duck: ban tan
+  gloss: [路, 远]
+  emotion: neutral
+- zh: [石头很冷]
+  duck: kuk pim
+  gloss: [石头, 冷]
+  emotion: neutral
+- zh: [天空是蓝的]
+  duck: ʔon wa
+  gloss: [天空, 蓝]
+  emotion: neutral
+- zh: [云是白的]
+  duck: kum hwa
+  gloss: [云, 白]
+  emotion: neutral
+- zh: [我听见声音]
+  duck: ma ʔin tak
+  gloss: [我, 声音, 听]
+  emotion: neutral
+- zh: [我闻味道]
+  duck: ma mum tak
+  gloss: [我, 味道, 闻]
+  emotion: neutral
+- zh: [我唱歌]
+  duck: ma kwaʔ kwaʔ
+  gloss: [我, 歌, 唱]
+  emotion: soft
+- zh: [天亮了]
+  duck: ʔo ʔo
+  gloss: [天, 亮]
+  emotion: neutral
+- zh: [草很绿, 草是绿的]
+  duck: ʔak ʔik
+  gloss: [草, 绿]
+  emotion: neutral
+- zh: [花很红, 花是红的]
+  duck: pwa kak
+  gloss: [花, 红]
+  emotion: soft
+- zh: [水是湿的]
+  duck: wa muk
+  gloss: [水, 湿]
+  emotion: neutral
+- zh: [我很慢]
+  duck: ma ʔun
+  gloss: [我, 慢]
+  emotion: neutral
+- zh: [我很干净]
+  duck: ma wi
+  gloss: [我, 干净]
+  emotion: soft
+- zh: [我很脏]
+  duck: ma ʔuk
+  gloss: [我, 脏]
+  emotion: neutral
+- zh: [我很高]
+  duck: ma po
+  gloss: [我, 高]
+  emotion: neutral
+- zh: [我很矮]
+  duck: ma pi
+  gloss: [我, 矮]
+  emotion: neutral

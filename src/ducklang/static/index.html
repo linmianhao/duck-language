@@ -1,0 +1,851 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>嘎语翻译器</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <style>
+    :root {
+      --ink: #1f332c;
+      --muted: #62786f;
+      --paper: #fffdf7;
+      --line: rgba(31, 51, 44, 0.12);
+      --accent: #1f6f5c;
+      --accent-deep: #154f43;
+      --amber: #d98b2b;
+      --danger: #b5483e;
+      --shadow: 0 24px 70px rgba(31, 51, 44, 0.16);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      min-height: 100%;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--ink);
+      font-family: "Segoe UI", "Noto Sans SC", "PingFang SC", system-ui, -apple-system, sans-serif;
+      background:
+        radial-gradient(circle at 10% 6%, rgba(255, 246, 196, 0.92), transparent 34%),
+        radial-gradient(circle at 86% 10%, rgba(255, 255, 255, 0.72), transparent 30%),
+        linear-gradient(160deg, #f8f2e4 0%, #e0eee7 48%, #b8d9d0 100%);
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background:
+        radial-gradient(60% 40% at 50% 108%, rgba(31, 111, 92, 0.18), transparent 70%),
+        repeating-radial-gradient(circle at 50% 108%, rgba(255, 255, 255, 0.16) 0 1px, transparent 1px 26px);
+      opacity: 0.8;
+    }
+
+    .shell {
+      position: relative;
+      z-index: 1;
+      width: min(1060px, calc(100% - 36px));
+      margin: 0 auto;
+      padding: 54px 0 42px;
+    }
+
+    .hero {
+      display: flex;
+      align-items: center;
+      gap: 28px;
+      margin-bottom: 28px;
+    }
+
+    .duck-art {
+      width: 156px;
+      height: auto;
+      flex: none;
+      filter: drop-shadow(0 18px 24px rgba(31, 51, 44, 0.18));
+      animation: bob 4.4s ease-in-out infinite;
+    }
+
+    @keyframes bob {
+      0%, 100% { transform: translateY(0) rotate(-1deg); }
+      50% { transform: translateY(-8px) rotate(1deg); }
+    }
+
+    .eyebrow {
+      margin: 0 0 8px;
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.24em;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(40px, 6vw, 68px);
+      line-height: 0.96;
+      letter-spacing: -0.045em;
+    }
+
+    .subtitle {
+      margin: 14px 0 0;
+      color: var(--muted);
+      font-size: 17px;
+      line-height: 1.6;
+    }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: minmax(0, 1.08fr) minmax(0, 0.92fr);
+      gap: 22px;
+      align-items: start;
+    }
+
+    .panel,
+    .result {
+      border: 1px solid rgba(255, 255, 255, 0.78);
+      border-radius: 26px;
+      background: rgba(255, 253, 247, 0.88);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(14px);
+    }
+
+    .panel {
+      padding: 26px;
+    }
+
+    .result {
+      position: sticky;
+      top: 24px;
+      padding: 26px;
+      animation: rise 0.35s ease both;
+    }
+
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .field-label {
+      display: block;
+      margin-bottom: 9px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 150px;
+      resize: vertical;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 18px;
+      background: #fffef9;
+      color: var(--ink);
+      font: inherit;
+      font-size: 19px;
+      line-height: 1.68;
+      outline: none;
+      transition: border-color 0.18s ease, box-shadow 0.18s ease;
+    }
+
+    textarea::placeholder {
+      color: #9aaba3;
+    }
+
+    textarea:focus {
+      border-color: rgba(31, 111, 92, 0.5);
+      box-shadow: 0 0 0 4px rgba(31, 111, 92, 0.12);
+    }
+
+    .examples {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 12px 0 20px;
+    }
+
+    .chip {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 7px 12px;
+      background: rgba(255, 255, 255, 0.62);
+      color: var(--muted);
+      font: inherit;
+      font-size: 13px;
+      cursor: pointer;
+      transition: color 0.16s ease, border-color 0.16s ease, transform 0.16s ease;
+    }
+
+    .chip:hover {
+      color: var(--accent);
+      border-color: rgba(31, 111, 92, 0.34);
+      transform: translateY(-1px);
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      align-items: end;
+    }
+
+    .control label {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    select {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 11px 12px;
+      background: #fffef9;
+      color: var(--ink);
+      font: inherit;
+      outline: none;
+    }
+
+    select:focus {
+      border-color: rgba(31, 111, 92, 0.5);
+      box-shadow: 0 0 0 3px rgba(31, 111, 92, 0.1);
+    }
+
+    .check {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 44px;
+      color: var(--muted);
+      font-size: 14px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .check input {
+      width: 17px;
+      height: 17px;
+      accent-color: var(--accent);
+    }
+
+    .actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 20px;
+    }
+
+    button {
+      font: inherit;
+      cursor: pointer;
+    }
+
+    .primary {
+      flex: 1;
+      border: 0;
+      border-radius: 14px;
+      padding: 15px 18px;
+      background: linear-gradient(135deg, #2a826b, var(--accent-deep));
+      color: #fff;
+      font-weight: 800;
+      letter-spacing: 0.02em;
+      box-shadow: 0 12px 26px rgba(21, 79, 67, 0.26);
+      transition: transform 0.16s ease, box-shadow 0.16s ease, opacity 0.16s ease;
+    }
+
+    .primary:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 16px 32px rgba(21, 79, 67, 0.3);
+    }
+
+    .primary:disabled {
+      cursor: wait;
+      opacity: 0.62;
+      transform: none;
+    }
+
+    .ghost {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 0 18px;
+      background: rgba(255, 255, 255, 0.55);
+      color: var(--ink);
+      transition: background 0.16s ease, border-color 0.16s ease;
+    }
+
+    .ghost:hover {
+      background: rgba(255, 255, 255, 0.9);
+      border-color: rgba(31, 111, 92, 0.28);
+    }
+
+    .status {
+      min-height: 22px;
+      margin: 14px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .status.error {
+      color: var(--danger);
+      font-weight: 600;
+    }
+
+    .result-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .result h2 {
+      margin: 0;
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+    }
+
+    .small {
+      border-radius: 9px;
+      padding: 6px 10px;
+      font-size: 12px;
+    }
+
+    .duck-text {
+      margin: 16px 0 8px;
+      color: #123f35;
+      font-family: "Cascadia Code", "Consolas", "SFMono-Regular", monospace;
+      font-size: clamp(24px, 3.3vw, 34px);
+      line-height: 1.38;
+      overflow-wrap: anywhere;
+    }
+
+    .gloss {
+      margin: 0 0 16px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.65;
+    }
+
+    .warnings {
+      display: grid;
+      gap: 6px;
+      margin-bottom: 14px;
+    }
+
+    .warning {
+      border: 1px solid rgba(217, 139, 43, 0.28);
+      border-radius: 10px;
+      padding: 8px 10px;
+      background: rgba(255, 236, 202, 0.56);
+      color: #8b5a16;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    audio {
+      width: 100%;
+      margin-top: 8px;
+    }
+
+    .download-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-top: 10px;
+    }
+
+    .download {
+      color: var(--accent);
+      font-size: 13px;
+      font-weight: 700;
+      text-decoration: none;
+    }
+
+    .download:hover {
+      text-decoration: underline;
+    }
+
+    .history {
+      margin-top: 20px;
+      border-top: 1px solid var(--line);
+      padding-top: 15px;
+    }
+
+    .history h3 {
+      margin: 0 0 10px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+
+    .history-item {
+      display: grid;
+      width: 100%;
+      gap: 3px;
+      margin-bottom: 8px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 10px 12px;
+      background: rgba(255, 255, 255, 0.52);
+      text-align: left;
+      transition: background 0.16s ease, border-color 0.16s ease;
+    }
+
+    .history-item:hover {
+      background: rgba(255, 255, 255, 0.92);
+      border-color: rgba(31, 111, 92, 0.26);
+    }
+
+    .history-item .zh {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .history-item .duck {
+      color: var(--accent);
+      font-family: "Cascadia Code", "Consolas", monospace;
+      font-size: 14px;
+      overflow-wrap: anywhere;
+    }
+
+    .empty {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.7;
+    }
+
+    .empty strong {
+      color: var(--ink);
+    }
+
+    footer {
+      margin-top: 26px;
+      color: var(--muted);
+      font-size: 12px;
+      text-align: center;
+    }
+
+    [hidden] {
+      display: none !important;
+    }
+
+    @media (max-width: 860px) {
+      .workspace {
+        grid-template-columns: 1fr;
+      }
+
+      .result {
+        position: static;
+      }
+
+      .hero {
+        align-items: flex-start;
+      }
+
+      .duck-art {
+        width: 118px;
+      }
+    }
+
+    @media (max-width: 560px) {
+      .shell {
+        width: min(100% - 24px, 1060px);
+        padding-top: 30px;
+      }
+
+      .hero {
+        gap: 16px;
+      }
+
+      .duck-art {
+        width: 94px;
+      }
+
+      .panel,
+      .result {
+        border-radius: 20px;
+        padding: 20px;
+      }
+
+      .controls {
+        grid-template-columns: 1fr;
+      }
+
+      .actions {
+        flex-direction: column;
+      }
+
+      .ghost {
+        padding: 13px;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .duck-art,
+      .result {
+        animation: none;
+      }
+
+      * {
+        scroll-behavior: auto !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="hero">
+      <svg class="duck-art" viewBox="0 0 180 150" role="img" aria-label="一只小鸭子">
+        <defs>
+          <linearGradient id="body" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#ffe28c"></stop>
+            <stop offset="1" stop-color="#f0bd48"></stop>
+          </linearGradient>
+          <linearGradient id="beak" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0" stop-color="#ffb15c"></stop>
+            <stop offset="1" stop-color="#e8832f"></stop>
+          </linearGradient>
+        </defs>
+        <ellipse cx="96" cy="128" rx="58" ry="12" fill="rgba(31,51,44,.12)"></ellipse>
+        <path d="M44 96c0-29 22-50 53-50 22 0 39 11 47 28 5 11 4 23-3 32-8 10-22 14-42 14H75c-20 0-31-9-31-24Z" fill="url(#body)"></path>
+        <path d="M44 96c16 10 38 15 63 15 17 0 30-3 40-9-4 15-19 24-43 24H75c-14 0-24-3-30-10-4-6-4-12-1-20Z" fill="rgba(232,163,60,.18)"></path>
+        <path d="M92 88c14-4 27 1 31 12-12 7-27 8-38 2 1-6 3-11 7-14Z" fill="rgba(232,163,60,.36)"></path>
+        <circle cx="78" cy="60" r="27" fill="#ffe39a"></circle>
+        <path d="M58 52c4-12 15-20 29-20 10 0 19 4 25 11-8-2-15-1-21 3-7 5-11 12-12 21-8-2-15-7-21-15Z" fill="rgba(255,255,255,.35)"></path>
+        <circle cx="88" cy="56" r="3.6" fill="#26352f"></circle>
+        <circle cx="89" cy="55" r="1.1" fill="#fff"></circle>
+        <path d="M103 62c13-5 27-3 29 5 2 8-9 14-26 11Z" fill="url(#beak)"></path>
+        <path d="M105 65c8-1 16 0 23 3" stroke="rgba(120,55,20,.28)" stroke-width="2" stroke-linecap="round" fill="none"></path>
+        <path d="M52 102c-11 2-19-1-22-7 7 1 13 2 20 1" stroke="#e8832f" stroke-width="4" stroke-linecap="round" fill="none"></path>
+        <path d="M131 96c9-8 17-11 23-9-5 5-9 10-12 16" stroke="#e8832f" stroke-width="4" stroke-linecap="round" fill="none"></path>
+      </svg>
+      <div>
+        <p class="eyebrow">DUCK LANGUAGE LAB</p>
+        <h1>嘎语翻译器</h1>
+        <p class="subtitle">把中文变成鸭子听得懂、也发得出的声音。输入一句话，听它嘎给你听。</p>
+      </div>
+    </header>
+
+    <div class="workspace">
+      <section class="panel" aria-labelledby="input-title">
+        <label class="field-label" id="input-title" for="text">中文输入</label>
+        <textarea id="text" maxlength="500" autocomplete="off" spellcheck="false" placeholder="例如：你好吗？我饿了，我们去水边吧。"></textarea>
+
+        <div class="examples" aria-label="示例">
+          <button class="chip" type="button" data-text="你好吗？">你好吗？</button>
+          <button class="chip" type="button" data-text="我饿了">我饿了</button>
+          <button class="chip" type="button" data-text="我喜欢你">我喜欢你</button>
+          <button class="chip" type="button" data-text="危险！">危险！</button>
+          <button class="chip" type="button" data-text="明天要下雨">明天要下雨</button>
+          <button class="chip" type="button" data-text="我们去水边吧">我们去水边吧</button>
+        </div>
+
+        <div class="controls">
+          <div class="control">
+            <label for="voice">音色</label>
+            <select id="voice">
+              <option value="duckling" selected>幼鸭</option>
+              <option value="adult">成鸭</option>
+              <option value="angry">愤怒鸭</option>
+              <option value="soft">温柔鸭</option>
+            </select>
+          </div>
+          <div class="control">
+            <label for="emotion">情绪</label>
+            <select id="emotion">
+              <option value="">自动（按标点/语境）</option>
+              <option value="neutral">平静</option>
+              <option value="question">疑问</option>
+              <option value="excited">兴奋</option>
+              <option value="alarm">警报</option>
+              <option value="soft">温柔</option>
+            </select>
+          </div>
+        </div>
+
+        <label class="check">
+          <input type="checkbox" id="autoplay" checked>
+          生成后自动播放
+        </label>
+
+        <div class="actions">
+          <button class="primary" id="go" type="button">翻译并嘎一声</button>
+          <button class="ghost" id="clear" type="button">清空</button>
+        </div>
+
+        <p class="status" id="status" aria-live="polite">Ctrl + Enter 也可以直接翻译。</p>
+      </section>
+
+      <section class="result" id="result" aria-live="polite" hidden>
+        <div class="result-head">
+          <h2>嘎语</h2>
+          <button class="ghost small" id="copy" type="button">复制</button>
+        </div>
+        <p class="duck-text" id="duck"></p>
+        <p class="gloss" id="gloss"></p>
+        <div class="warnings" id="warnings"></div>
+        <audio id="audio" controls preload="metadata"></audio>
+        <div class="download-row">
+          <a class="download" id="download" href="#" download="duck.wav">下载 WAV</a>
+        </div>
+        <div class="history" id="history" hidden>
+          <h3>最近</h3>
+          <div id="history-list"></div>
+        </div>
+      </section>
+
+      <section class="result" id="placeholder">
+        <h2>怎么说</h2>
+        <p class="empty"><strong>先输入一句中文。</strong>翻译结果、逐词直译和鸭子叫声会出现在这里。未收录的词会自动转写成合法鸭语音节，并标上借词记号。</p>
+      </section>
+    </div>
+
+    <footer>本地运行 · 离线翻译 · 程序化鸭叫合成</footer>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const voiceLabels = {
+      duckling: "幼鸭",
+      adult: "成鸭",
+      angry: "愤怒鸭",
+      soft: "温柔鸭"
+    };
+    const emotionLabels = {
+      neutral: "平静",
+      question: "疑问",
+      excited: "兴奋",
+      alarm: "警报",
+      soft: "温柔"
+    };
+    const history = [];
+
+    function setStatus(message, isError = false) {
+      const status = $("status");
+      status.textContent = message;
+      status.classList.toggle("error", isError);
+    }
+
+    function setLoading(loading) {
+      const button = $("go");
+      button.disabled = loading;
+      button.textContent = loading ? "正在嘎…" : "翻译并嘎一声";
+    }
+
+    function fillSelect(select, items, includeAuto = false) {
+      const current = select.value;
+      select.innerHTML = "";
+      if (includeAuto) {
+        const auto = document.createElement("option");
+        auto.value = "";
+        auto.textContent = "自动（按标点/语境）";
+        select.append(auto);
+      }
+      for (const item of items) {
+        const option = document.createElement("option");
+        option.value = item.id;
+        option.textContent = item.label || item.id;
+        select.append(option);
+      }
+      if (current && Array.from(select.options).some((option) => option.value === current)) {
+        select.value = current;
+      }
+    }
+
+    async function loadMeta() {
+      try {
+        const response = await fetch("/api/voices");
+        if (!response.ok) return;
+        const data = await response.json();
+        if (Array.isArray(data.voices) && data.voices.length) {
+          fillSelect($("voice"), data.voices);
+        }
+        if (Array.isArray(data.emotions) && data.emotions.length) {
+          fillSelect($("emotion"), data.emotions, true);
+          $("emotion").value = "";
+        }
+      } catch {
+        setStatus("音色列表加载失败，使用内置选项。", true);
+      }
+    }
+
+    function play(url) {
+      const audio = $("audio");
+      if (!audio.src.endsWith(url)) {
+        audio.src = url;
+      }
+      audio.currentTime = 0;
+      const promise = audio.play();
+      if (promise && typeof promise.catch === "function") {
+        promise.catch(() => setStatus("浏览器拦截了自动播放，请点击播放器。"));
+      }
+    }
+
+    function render(data, remember = true) {
+      $("result").hidden = false;
+      $("placeholder").hidden = true;
+      $("duck").textContent = data.duck;
+      $("gloss").textContent = data.gloss ? `直译：${data.gloss}` : "";
+      $("audio").src = data.audio_url;
+      $("download").href = data.audio_url;
+      $("download").setAttribute("download", "duck.wav");
+
+      const warnings = $("warnings");
+      warnings.innerHTML = "";
+      for (const warning of data.warnings || []) {
+        const item = document.createElement("p");
+        item.className = "warning";
+        item.textContent = warning;
+        warnings.append(item);
+      }
+
+      if (remember) {
+        history.unshift(data);
+        if (history.length > 5) history.pop();
+        renderHistory();
+      }
+    }
+
+    function renderHistory() {
+      const box = $("history");
+      const list = $("history-list");
+      list.innerHTML = "";
+      if (!history.length) {
+        box.hidden = true;
+        return;
+      }
+      box.hidden = false;
+      for (const item of history) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "history-item";
+
+        const zh = document.createElement("span");
+        zh.className = "zh";
+        zh.textContent = item.source;
+
+        const duck = document.createElement("span");
+        duck.className = "duck";
+        duck.textContent = item.duck;
+
+        button.append(zh, duck);
+        button.addEventListener("click", () => {
+          $("text").value = item.source;
+          render(item, false);
+          play(item.audio_url);
+          setStatus(`已重播：${item.source}`);
+        });
+        list.append(button);
+      }
+    }
+
+    async function run() {
+      const text = $("text").value.trim();
+      if (!text) {
+        $("text").focus();
+        setStatus("先输入一句中文。", true);
+        return;
+      }
+
+      setLoading(true);
+      setStatus("正在翻译并合成鸭叫…");
+      try {
+        const response = await fetch("/api/translate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            text,
+            voice: $("voice").value,
+            emotion: $("emotion").value || null
+          })
+        });
+
+        let data = {};
+        try {
+          data = await response.json();
+        } catch {
+          data = {};
+        }
+
+        if (!response.ok) {
+          const detail = data.detail;
+          throw new Error(typeof detail === "string" ? detail : "请求失败，请检查输入。");
+        }
+
+        render(data);
+        const duration = Number(data.duration || 0).toFixed(2);
+        setStatus(`已生成 ${duration} 秒鸭叫。`);
+        if ($("autoplay").checked) {
+          play(data.audio_url);
+        }
+      } catch (error) {
+        setStatus(error.message || "翻译失败，请稍后再试。", true);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    $("go").addEventListener("click", run);
+
+    $("clear").addEventListener("click", () => {
+      $("text").value = "";
+      $("result").hidden = true;
+      $("placeholder").hidden = false;
+      $("audio").removeAttribute("src");
+      $("text").focus();
+      setStatus("Ctrl + Enter 也可以直接翻译。");
+    });
+
+    $("copy").addEventListener("click", async () => {
+      const text = $("duck").textContent;
+      if (!text) return;
+      try {
+        await navigator.clipboard.writeText(text);
+        setStatus("已复制鸭语。");
+      } catch {
+        setStatus("复制失败，请手动选择文本。", true);
+      }
+    });
+
+    $("text").addEventListener("keydown", (event) => {
+      if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+        event.preventDefault();
+        run();
+      }
+    });
+
+    document.querySelectorAll(".chip").forEach((chip) => {
+      chip.addEventListener("click", () => {
+        $("text").value = chip.dataset.text || "";
+        $("text").focus();
+        run();
+      });
+    });
+
+    $("audio").addEventListener("error", () => {
+      setStatus("音频加载失败，请重试。", true);
+    });
+
+    loadMeta();
+    $("text").focus();
+  </script>
+</body>
+</html>

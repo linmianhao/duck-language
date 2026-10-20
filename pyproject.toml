@@ -1,0 +1,47 @@
+[project]
+name = "ducklang"
+version = "0.1.0"
+description = "中文 -> 嘎语翻译与程序化鸭叫合成"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=2.0",
+    "jieba>=0.42.1",
+    "pyyaml>=6.0.2",
+    "typer>=0.15",
+    "pypinyin>=0.53",
+    "fastapi>=0.153.0",
+    "uvicorn>=0.30",
+]
+
+[project.scripts]
+duck = "ducklang.cli:app"
+duck-web = "ducklang.web:main"
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "pytest>=8.3",
+    "ruff>=0.9",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ducklang"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"data" = "ducklang/data"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint.per-file-ignores]
+"src/ducklang/cli.py" = ["B008"]
