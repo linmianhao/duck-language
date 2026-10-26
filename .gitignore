@@ -10,3 +10,4 @@ samples/raw/
 samples/*.wav
 jieba.cache
 pytest-of-*/
+samples/compare/

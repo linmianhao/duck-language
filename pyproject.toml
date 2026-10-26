@@ -9,7 +9,6 @@ dependencies = [
     "jieba>=0.42.1",
     "pyyaml>=6.0.2",
     "typer>=0.15",
-    "pypinyin>=0.53",
     "fastapi>=0.153.0",
     "uvicorn>=0.30",
 ]

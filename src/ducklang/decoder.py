@@ -18,10 +18,10 @@ from .phonology import Syllable, word_from_syllables
 from .reverse import ReverseResult, reverse
 
 # 判定阈值（与 synth.py 的参数配套）
-LONG_THRESHOLD_S = 0.18  # 短 ≈ 0.10–0.13 s，长 ≈ 0.24–0.31 s
+LONG_THRESHOLD_S = 0.20  # 短 ≈ 0.10–0.16 s，长 ≈ 0.25–0.38 s（噪声会吃掉尾巴）
 CONTOUR_THRESHOLD_ST = 2.5  # 降 / 升 ≈ ±6 个半音，平 ≈ 0
 CENTROID_THRESHOLD_HZ = 1550.0  # 暗 ≈ 1.1–1.35 kHz，亮 ≈ 1.8–2.1 kHz（几何中点）
-WORD_GAP_S = 0.13  # 词内 ≈ 0.05–0.08 s，词间 ≈ 0.20–0.22 s
+WORD_GAP_S = 0.14  # 词内 ≈ 0.05–0.10 s，词间 ≈ 0.19–0.22 s
 CLAUSE_GAP_S = 0.36  # 子句间 ≈ 0.50 s
 F0_RANGE = (90.0, 800.0)
 
@@ -96,6 +96,9 @@ def _segments(x: np.ndarray, sr: int) -> list[tuple[int, int]]:
         return []
     frames = np.lib.stride_tricks.sliding_window_view(x, win)[::hop]
     db = 10 * np.log10(np.mean(frames**2, axis=1) + 1e-12)
+    # 20 ms 平滑：抹掉"嘎"本身的深调幅凹陷，免得一声被切成两段
+    smooth = int(0.020 * sr / hop)
+    db = np.convolve(db, np.ones(smooth) / smooth, mode="same")
     floor, peak = np.percentile(db, 10), np.max(db)
     high = max(floor + 12.0, peak - 20.0)
     low = high - 4.0  # 迟滞，避免在阈值附近抖动
@@ -190,11 +193,14 @@ def _contour_semitones(seg: np.ndarray, sr: int) -> float:
     if len(voiced) < 4:
         return 0.0
     times = np.array([i * hop for i, f in enumerate(f0s) if f is not None], dtype=float) / sr
-    median = np.median(voiced)
-    voiced = np.where(voiced > 1.6 * median, voiced / 2, voiced)  # 八度纠错
-    voiced = np.where(voiced < 0.62 * median, voiced * 2, voiced)
-    # Theil-Sen 斜率：对首尾被混响拖尾污染的帧不敏感
+    # 八度折叠：鸭叫的周期加倍会让 YIN 在 f0 和 f0/2 之间跳。按"音级"取圆周平均作参考，
+    # 把每帧折叠到参考 ±6 个半音以内（音节内走势只有 ±4 个半音左右，不会被折坏）
     st = 12 * np.log2(voiced)
+    angle = 2 * np.pi * st / 12
+    ref = 12 * np.angle(np.mean(np.exp(1j * angle))) / (2 * np.pi)
+    d = st - ref
+    st = ref + d - 12 * np.round(d / 12)
+    # Theil-Sen 斜率：对首尾被混响拖尾污染的帧不敏感
     i, j = np.triu_indices(len(st), k=1)
     dt = times[j] - times[i]
     keep = dt > 0

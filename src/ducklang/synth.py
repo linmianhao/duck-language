@@ -23,17 +23,18 @@ from .prosody import Voice, adjust, get_voice
 
 SR = 48_000
 
-# 时长（秒，tempo = 1 时）；长音 ≥ 2.5 倍短音，解码阈值在两者之间
-SHORT_S = 0.12
-LONG_S = 0.32
+# 时长（秒，tempo = 1 时）；长音 ≥ 2.4 倍短音，解码阈值在两者之间
+SHORT_S = 0.15
+LONG_S = 0.36
 # 静音（秒）：词内音节 / 词间 / 子句间，解码器靠它们切分
 GAP_SYLLABLE = 0.060
 GAP_WORD = 0.200
 GAP_CLAUSE = 0.500
 
 # 走势：基频倍率关键点 (相对时间, 倍率)。降 / 升 首尾相差约 ±8 个半音，平 ≤ 0.5 个半音
+# 降调开头有一个很短的上冲（"嘎~"），只占前 10%，不影响整体斜率
 CONTOUR_SHAPES = {
-    "a": ((0.0, 1.25), (1.0, 0.78)),
+    "a": ((0.0, 1.16), (0.1, 1.25), (1.0, 0.76)),
     "i": ((0.0, 0.80), (1.0, 1.25)),
     "o": ((0.0, 1.0), (1.0, 0.98)),
 }
@@ -99,12 +100,14 @@ def _f0_curve(syllable: Syllable, voice: Voice, n: int, rng: np.random.Generator
     return voice.f0 * syllable.pitch * shape * 2.0 ** (wobble / 12.0)
 
 
-def _source(f0: np.ndarray, rng: np.random.Generator) -> np.ndarray:
+def _source(f0: np.ndarray, rng: np.random.Generator, subharmonic: float) -> np.ndarray:
     phase = 2.0 * np.pi * np.cumsum(f0) / SR
     n_harm = int(11_000 / float(np.max(f0)))
     source = np.zeros_like(f0)
     for k in range(1, n_harm + 1):
-        source += np.sin(k * phase) / k**0.7
+        source += np.sin(k * phase) / k**0.55
+    # 周期加倍（相邻两个周期一强一弱）：鸭叫"嘎"的破音感主要来自这里
+    source *= 1.0 - subharmonic * (0.5 + 0.5 * np.cos(phase / 2.0))
     # 每个周期的幅度微抖（shimmer），让声音不那么"电子"
     shimmer = 1.0 + 0.06 * np.convolve(rng.normal(size=len(f0)), np.ones(96) / 96, mode="same")
     return source * shimmer
@@ -132,21 +135,23 @@ def synth_syllable(
     n = int(SR * dur)
     t = np.arange(n) / SR
 
+    bright = syllable.timbre == "k"
+    rough = min(1.2, syllable.rough)
     f0 = _f0_curve(syllable, voice, n, rng)
-    body = _source(f0, rng)
+    body = _source(f0, rng, subharmonic=(0.45 if bright else 0.3) * rough)
 
-    # 调幅：亮音色更深，暗音色更圆
-    depth = (0.55 if syllable.timbre == "k" else 0.3) * min(1.6, syllable.rough)
+    # 调幅：亮音色更深，暗音色更圆；上限 0.8，太深会让解码器把一声切成两段
+    depth = min(0.8, (0.75 if bright else 0.45) * rough)
     am = 1.0 - depth * (0.5 + 0.5 * np.sin(2.0 * np.pi * voice.am_rate * t + rng.uniform(0, 6.28)))
     body = body * am
-    body += 0.6 * np.std(body) * rng.normal(size=n) * 0.08  # 气息
+    body += 0.25 * np.std(body) * rng.normal(size=n)  # 气息
 
     body = _apply_envelope(body, bank, syllable.timbre)
 
-    # 振幅包络：5 ms 起音，尾部 15% 衰减（尾巴太长会让解码器量到的时长和停顿不稳）
-    amp = np.minimum(1.0, t / 0.005)
-    tail = int(n * 0.85)
-    amp[tail:] *= np.linspace(1.0, 0.0, n - tail) ** 1.5
+    # 振幅包络：4 ms 起音，尾部 20% 快速收掉（干脆的结尾，也让解码器量到的时长和停顿更稳）
+    amp = np.minimum(1.0, t / 0.004)
+    tail = int(n * 0.8)
+    amp[tail:] *= np.linspace(1.0, 0.0, n - tail) ** 2
     body *= amp
     body /= np.max(np.abs(body)) + 1e-9
 
@@ -159,7 +164,10 @@ def synth_syllable(
         fade = np.linspace(1.0, 0.0, m) ** 2
         body[:m] = body[:m] * (1.0 - 0.4 * fade) + attack[:m] * 0.4 * fade
 
-    return body / (np.max(np.abs(body)) + 1e-9) * min(1.0, 0.8 * syllable.volume)
+    # 按 RMS 归一化：深调幅 + 周期加倍让亮音节峰值因数更大，按峰值归一会让它们听起来更轻，
+    # 在噪声里先被淹没。整句最后再统一做峰值归一。
+    rms = float(np.sqrt(np.mean(body**2))) + 1e-9
+    return body / rms * 0.22 * syllable.volume
 
 
 def _highpass(audio: np.ndarray, cutoff: float) -> np.ndarray:
