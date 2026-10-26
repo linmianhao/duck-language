@@ -40,6 +40,7 @@ class TranslateRequest(BaseModel):
     emotion: str | None = None
     strict: bool = False
     target: str = "pc"
+    tail: bool = True  # 每句末尾加"嘎嘎嘎"
 
 
 class TranslateResponse(BaseModel):
@@ -58,6 +59,7 @@ class ReverseRequest(BaseModel):
     voice: str = "adult"
     emotion: str | None = None
     target: str = "pc"
+    tail: bool = True
 
 
 class ReverseResponse(BaseModel):
@@ -145,7 +147,7 @@ def api_translate(request: TranslateRequest) -> TranslateResponse:
 
     filename, path = _new_audio_path()
     render_result(result, voice=request.voice, emotion=request.emotion, out_path=path,
-                  target=request.target)
+                  target=request.target, tail=request.tail)
     return TranslateResponse(
         source=result.source,
         duck=result.duck,
@@ -170,7 +172,7 @@ def api_reverse(request: ReverseRequest) -> ReverseResponse:
     try:
         filename, path = _new_audio_path()
         render_duck(request.text, voice=request.voice, emotion=request.emotion or "neutral",
-                    out_path=path, target=request.target)
+                    out_path=path, target=request.target, tail=request.tail)
         audio_url, duration = f"/api/audio/{filename}", _duration(path)
     except ValueError:
         pass  # 有非法音节时只翻译不发声

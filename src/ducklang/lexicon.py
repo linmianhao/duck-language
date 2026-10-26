@@ -10,7 +10,7 @@ from pathlib import Path
 
 import yaml
 
-from .phonology import feature_distance, parse_word, split_words
+from .phonology import feature_distance, is_valid_word, parse_word, split_words
 
 
 def data_dir() -> Path:
@@ -157,6 +157,8 @@ class Lexicon:
                     problems.append(f"非复数代词或警报却是重叠形式：{part}")
             if len(word.parts) > 1 and not all(self.lookup_duck(p) for p in word.parts):
                 problems.append(f"短语里有未定义的词：{word.duck}")
+            if any(len(parse_word(p)) > 2 for p in word.parts if is_valid_word(p)):
+                problems.append(f"词最多两个音节（三音节留给句尾装饰）：{word.duck}")
 
         singles = self.single_words()
         for a, b in itertools.combinations(singles, 2):

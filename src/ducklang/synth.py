@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 import wave
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
@@ -18,7 +18,7 @@ import numpy as np
 
 from .ir import TranslationResult
 from .lexicon import data_dir
-from .phonology import Syllable, parse_word
+from .phonology import TAIL_WORD, Syllable, parse_word
 from .prosody import Voice, adjust, get_voice
 
 SR = 48_000
@@ -177,30 +177,50 @@ def _highpass(audio: np.ndarray, cutoff: float) -> np.ndarray:
     return np.fft.irfft(spec, len(audio))
 
 
+# 句尾"嘎嘎嘎"三声的音域：一声比一声低一点，像在点头
+TAIL_PITCH = (1.08, 1.0, 0.92)
+
+
 def render_words(
     clauses: list[tuple[list[str], str, list[int]]],
     *,
     voice: str = "adult",
     target: str = "pc",
+    tail: bool = True,
+    sentence_ends: list[bool] | None = None,
 ) -> np.ndarray:
-    """clauses: [(鸭语词列表, 情绪, 每个词的强调等级)]，返回浮点音频。"""
+    """clauses: [(鸭语词列表, 情绪, 每个词的强调等级)]，返回浮点音频。
+
+    tail=True 时，在 sentence_ends 为 True 的子句后面加句尾装饰"嘎嘎嘎"（默认每个子句都加）。
+    """
     if target not in TARGETS:
         raise ValueError(f"未知输出目标：{target}（可选：{', '.join(TARGETS)}）")
     preset = get_voice(voice)
     bank = load_bank()
+    ends = sentence_ends if sentence_ends is not None else [True] * len(clauses)
     pieces: list[np.ndarray] = []
     seed = 7
+
+    def say(word: str, emotion: str, emphasis: int, pitches: tuple[float, ...] = ()) -> None:
+        nonlocal seed
+        syllables = parse_word(word)
+        for syl_index, syllable in enumerate(syllables):
+            adjusted = adjust(syllable, preset, emotion, emphasis=emphasis)
+            if pitches:
+                adjusted = replace(adjusted, pitch=adjusted.pitch * pitches[syl_index])
+            pieces.append(synth_syllable(adjusted, preset, seed=seed, bank=bank))
+            seed += 13
+            if syl_index != len(syllables) - 1:
+                pieces.append(np.zeros(int(SR * GAP_SYLLABLE / adjusted.tempo)))
+
     for clause_index, (words, emotion, emphasis) in enumerate(clauses):
         for word_index, word in enumerate(words):
-            syllables = parse_word(word)
-            for syl_index, syllable in enumerate(syllables):
-                adjusted = adjust(syllable, preset, emotion, emphasis=emphasis[word_index])
-                pieces.append(synth_syllable(adjusted, preset, seed=seed, bank=bank))
-                seed += 13
-                if syl_index != len(syllables) - 1:
-                    pieces.append(np.zeros(int(SR * GAP_SYLLABLE / adjusted.tempo)))
+            say(word, emotion, emphasis[word_index])
             if word_index != len(words) - 1:
                 pieces.append(np.zeros(int(SR * GAP_WORD)))
+        if tail and words and ends[clause_index]:
+            pieces.append(np.zeros(int(SR * GAP_WORD)))
+            say(TAIL_WORD, emotion, 0, TAIL_PITCH)
         if clause_index != len(clauses) - 1:
             pieces.append(np.zeros(int(SR * GAP_CLAUSE)))
     if not pieces:
@@ -247,8 +267,10 @@ def render_result(
     emotion: str | None = None,
     out_path: Path | None = None,
     target: str = "pc",
+    tail: bool = True,
 ) -> Path:
     clauses = []
+    ends = []
     for clause in result.clauses:
         words: list[str] = []
         emphasis: list[int] = []
@@ -258,7 +280,10 @@ def render_result(
                 emphasis.append(token.emphasis)
         if words:
             clauses.append((words, emotion or clause.emotion, emphasis))
-    audio = render_words(clauses, voice=voice, target=target)
+            ends.append(clause.punctuation not in {",", "，"})
+    if ends:
+        ends[-1] = True
+    audio = render_words(clauses, voice=voice, target=target, tail=tail, sentence_ends=ends)
     return write_wav(audio, Path(out_path or _default_out_path()))
 
 
@@ -269,20 +294,27 @@ def render_duck(
     emotion: str = "neutral",
     out_path: Path | None = None,
     target: str = "pc",
+    tail: bool = True,
 ) -> Path:
     """直接合成一段鸭语文本（不经过翻译）。"""
     from .reverse import _split_clauses
 
     clauses = []
+    ends = []
     for body, punct in _split_clauses(duck.lower()):
-        words = body.split()
+        words = [w for w in body.split() if w != TAIL_WORD]
         for word in words:
             parse_word(word)
+        if not words:
+            continue
         clause_emotion = emotion
         if emotion == "neutral" and punct in {"?", "？"}:
             clause_emotion = "question"
         clauses.append((words, clause_emotion, [0] * len(words)))
-    audio = render_words(clauses, voice=voice, target=target)
+        ends.append(punct not in {",", "，"})
+    if ends:
+        ends[-1] = True
+    audio = render_words(clauses, voice=voice, target=target, tail=tail, sentence_ends=ends)
     return write_wav(audio, Path(out_path or _default_out_path()))
 
 
@@ -294,9 +326,11 @@ def render_text(
     out_path: Path | None = None,
     strict: bool = False,
     target: str = "pc",
+    tail: bool = True,
 ) -> tuple[TranslationResult, Path]:
     from .translator import translate
 
     result = translate(text, strict=strict)
-    path = render_result(result, voice=voice, emotion=emotion, out_path=out_path, target=target)
+    path = render_result(result, voice=voice, emotion=emotion, out_path=out_path, target=target,
+                         tail=tail)
     return result, path

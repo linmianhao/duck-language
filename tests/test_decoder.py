@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 from ducklang.channel import simulate
-from ducklang.decoder import decode, decode_audio
+from ducklang.decoder import decode, decode_audio, read_wav
 from ducklang.phonology import ALL_SYLLABLES
 from ducklang.prosody import VOICES
 from ducklang.synth import SR, render_duck, render_words
@@ -62,6 +62,37 @@ def test_decode_file_and_translate(tmp_path):
     assert decoded.duck == "wa waka koo ki?"
     assert decoded.zh == "你吃了吗？"
     assert decoded.confidence > 0.5
+
+
+def test_tail_is_audible_but_stripped(tmp_path):
+    """句尾"嘎嘎嘎"让声音更长，但解码结果和原文一致。"""
+    with_tail = render_duck("ka wakaa kii。 wa wi ki?", out_path=tmp_path / "t.wav")
+    without = render_duck("ka wakaa kii。 wa wi ki?", tail=False, out_path=tmp_path / "n.wav")
+    a, _ = read_wav(with_tail)
+    b, _ = read_wav(without)
+    assert len(a) - len(b) > 2 * 0.5 * SR  # 两句，每句多出约 0.8 秒
+    for path in (with_tail, without):
+        decoded = decode(path)
+        assert decoded.duck == "ka wakaa kii。 wa wi ki?"
+        assert len(decoded.syllables) == 7
+
+
+def test_tail_only_after_sentences_not_commas(tmp_path):
+    from ducklang.synth import render_result
+    from ducklang.translator import translate
+
+    result = translate("我饿了，我们去水边吧")
+    with_tail, _ = read_wav(render_result(result, out_path=tmp_path / "t.wav"))
+    without, _ = read_wav(render_result(result, tail=False, out_path=tmp_path / "n.wav"))
+    extra = (len(with_tail) - len(without)) / SR
+    assert 0.5 < extra < 1.2  # 只在整句末尾加一次，逗号后面不加
+    assert decode(tmp_path / "t.wav").words == result.words
+
+
+def test_damaged_tail_is_still_stripped():
+    """噪声吃掉一声时剩下的 kaka 在子句末尾也当作装饰。"""
+    audio = render_words([(["ka", "wakaa", "kii", "kaka"], "neutral", [0, 0, 0, 0])], tail=False)
+    assert decode_audio(audio, SR, translate=False).words == ["ka", "wakaa", "kii"]
 
 
 def test_silence_does_not_crash():

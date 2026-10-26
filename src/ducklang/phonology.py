@@ -15,6 +15,10 @@ CONTOURS = ("a", "i", "o")  # a = 降，i = 升，o = 平
 TIMBRE_NAMES = {"k": "亮", "w": "暗"}
 CONTOUR_NAMES = {"a": "降", "i": "升", "o": "平"}
 
+# 句尾装饰"嘎嘎嘎"：三个亮降短音。词典里的词最多两个音节，三音节的它不会和任何词混淆，
+# 解码器认出来直接丢掉。只出现在声音里，不出现在鸭语文本里。
+TAIL_WORD = "kakaka"
+
 _SYLLABLE_RE = re.compile(r"([kw])([aio])(\2?)")
 _SPLIT_RE = re.compile(r"[\s,.;:!?。，！？；：、]+")
 

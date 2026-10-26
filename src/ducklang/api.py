@@ -25,12 +25,14 @@ def render(
     emotion: str | None = None,
     out_path: Path | None = None,
     target: str = "pc",
+    tail: bool = True,
 ) -> Path:
-    """合成 WAV：传 TranslationResult 或一段鸭语文本。"""
+    """合成 WAV：传 TranslationResult 或一段鸭语文本。tail=True 时每句末尾加"嘎嘎嘎"。"""
     if isinstance(result, str):
         return render_duck(result, voice=voice, emotion=emotion or "neutral",
-                           out_path=out_path, target=target)
-    return render_result(result, voice=voice, emotion=emotion, out_path=out_path, target=target)
+                           out_path=out_path, target=target, tail=tail)
+    return render_result(result, voice=voice, emotion=emotion, out_path=out_path, target=target,
+                         tail=tail)
 
 
 def speak(
@@ -42,9 +44,11 @@ def speak(
     play: bool = True,
     strict: bool = False,
     target: str = "pc",
+    tail: bool = True,
 ) -> Speech:
     result = translate(text, strict=strict)
-    path = render_result(result, voice=voice, emotion=emotion, out_path=out_path, target=target)
+    path = render_result(result, voice=voice, emotion=emotion, out_path=out_path, target=target,
+                         tail=tail)
     played = play_wav(path) if play else False
     return Speech(result=result, path=path, played=played)
 

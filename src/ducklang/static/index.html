@@ -677,10 +677,16 @@
               <option value="robot">机器人喇叭</option>
             </select>
           </div>
-          <label class="check">
-            <input type="checkbox" id="autoplay" checked>
-            生成后自动播放
-          </label>
+          <div class="control">
+            <label class="check">
+              <input type="checkbox" id="autoplay" checked>
+              生成后自动播放
+            </label>
+            <label class="check" title="每句话结束时加三声嘎，只在声音里，解码时会自动去掉">
+              <input type="checkbox" id="tail" checked>
+              句尾加「嘎嘎嘎」
+            </label>
+          </div>
         </div>
 
         <div class="actions">
@@ -922,7 +928,8 @@
         const options = {
           voice: $("voice").value,
           emotion: $("emotion").value || null,
-          target: $("target").value
+          target: $("target").value,
+          tail: $("tail").checked
         };
         if (mode === "zh") {
           setStatus("正在翻译并合成鸭叫…");

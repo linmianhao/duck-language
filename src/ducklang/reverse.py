@@ -6,7 +6,7 @@ import re
 from dataclasses import dataclass, field
 
 from .lexicon import Lexicon, Phrasebook, Word
-from .phonology import is_valid_word
+from .phonology import TAIL_WORD, is_valid_word
 
 _CLAUSE_RE = re.compile(r"([,.!?;，。！？；]+)")
 GO_VERBS = {"wiiko", "wiki"}
@@ -249,6 +249,9 @@ def reverse(
     clauses: list[ReverseClause] = []
     warnings: list[str] = []
     for body, punct in _split_clauses(text.lower()):
+        body = " ".join(w for w in body.split() if w != TAIL_WORD)  # 句尾装饰，不翻译
+        if not body:
+            continue
         phrase = phrasebook.lookup_duck(body)
         if phrase is not None:
             zh = phrase.zh[0]

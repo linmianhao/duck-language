@@ -28,14 +28,15 @@ def _print_result(result: TranslationResult, path: Path, played: bool, show_glos
 
 
 def _run(text: str, *, save: Path | None, no_play: bool, show_gloss: bool, voice: str,
-         emotion: str | None, strict: bool, json_out: bool, target: str) -> None:
+         emotion: str | None, strict: bool, json_out: bool, target: str, tail: bool) -> None:
     try:
         result = translate(text, strict=strict)
     except (UnknownWordError, ValueError) as exc:
         typer.echo(f"错误：{exc}", err=True)
         raise typer.Exit(1) from exc
 
-    path = render_result(result, voice=voice, emotion=emotion, out_path=save, target=target)
+    path = render_result(result, voice=voice, emotion=emotion, out_path=save, target=target,
+                         tail=tail)
     played = False if no_play else play_wav(path)
 
     if json_out:
@@ -50,7 +51,7 @@ def _run(text: str, *, save: Path | None, no_play: bool, show_gloss: bool, voice
 
 
 def _run_reverse(text: str, *, save: Path | None, no_play: bool, show_gloss: bool, voice: str,
-                 emotion: str | None, json_out: bool, target: str) -> None:
+                 emotion: str | None, json_out: bool, target: str, tail: bool) -> None:
     try:
         result = reverse(text)
     except ValueError as exc:
@@ -60,7 +61,7 @@ def _run_reverse(text: str, *, save: Path | None, no_play: bool, show_gloss: boo
     path, played = None, False
     try:
         path = render_duck(text, voice=voice, emotion=emotion or "neutral", out_path=save,
-                           target=target)
+                           target=target, tail=tail)
         played = False if no_play else play_wav(path)
     except ValueError:
         pass  # 有非法音节时只翻译不发声
@@ -134,6 +135,7 @@ def main(
     emotion: str | None = typer.Option(None, "--emotion", "-e",
                                        help=f"覆盖情绪：{', '.join(EMOTIONS)}"),
     target: str = typer.Option("pc", "--target", "-t", help=f"播放设备：{', '.join(TARGETS)}"),
+    tail: bool = typer.Option(True, "--tail/--no-tail", help="每句末尾加「嘎嘎嘎」（只在声音里）"),
     strict: bool = typer.Option(False, "--strict", help="遇到未收录词直接报错"),
     json_out: bool = typer.Option(False, "--json", help="输出 JSON"),
     voices: bool = typer.Option(False, "--voices", help="列出可用音色"),
@@ -157,7 +159,7 @@ def main(
         raise typer.Exit(1)
 
     common = {"no_play": no_play, "show_gloss": gloss, "voice": voice, "emotion": emotion,
-              "json_out": json_out, "target": target}
+              "json_out": json_out, "target": target, "tail": tail}
     if text is None:
         if not sys.stdin.isatty():
             lines = [line.strip() for line in sys.stdin.read().splitlines()]

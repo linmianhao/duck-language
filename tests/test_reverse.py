@@ -38,6 +38,10 @@ def test_unknown_and_invalid_words_warn_but_do_not_crash():
     assert result.zh
 
 
+def test_tail_word_is_ignored():
+    assert reverse("wa waka koo ki kakaka").zh == "你吃了吗？"
+
+
 def test_empty_rejected():
     with pytest.raises(ValueError):
         reverse("  ")

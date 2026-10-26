@@ -14,7 +14,7 @@ from pathlib import Path
 import numpy as np
 
 from .lexicon import Lexicon, Phrasebook
-from .phonology import Syllable, word_from_syllables
+from .phonology import TAIL_WORD, Syllable, word_from_syllables
 from .reverse import ReverseResult, reverse
 
 # 判定阈值（与 synth.py 的参数配套）
@@ -269,11 +269,39 @@ def decode_audio(
         else:
             clauses[-1][-1].append(cur)
 
+    # 句尾装饰"嘎嘎嘎"：认出来就丢掉，并当作句子边界。噪声吃掉其中一声时会剩下 kaka，
+    # 而 SOV 语序的子句以动词结尾，子句末尾的 kaka（我们）几乎不可能是真词，也当作装饰
+    def is_tail(group: list[DecodedSyllable], is_last: bool, has_words: bool) -> bool:
+        raw = word_from_syllables([d.syllable for d in group])
+        if raw == TAIL_WORD:
+            return True
+        if not (is_last and has_words):
+            return False
+        n_ka = sum(d.syllable.text == "ka" for d in group)
+        bright_short = all(d.syllable.timbre == "k" and not d.syllable.long for d in group)
+        # 三音节不可能是词：亮短且至少两声 ka 就是被噪声带歪的"嘎嘎嘎"；两音节只认 kaka
+        return (len(group) >= 3 and bright_short and n_ka >= 2) or raw == "kaka"
+
+    sentences: list[list[list[DecodedSyllable]]] = []
+    kept: list[DecodedSyllable] = []
+    for clause in clauses:
+        current: list[list[DecodedSyllable]] = []
+        for index, group in enumerate(clause):
+            if is_tail(group, index == len(clause) - 1, bool(current)):
+                if current:
+                    sentences.append(current)
+                current = []
+                continue
+            current.append(group)
+            kept.extend(group)
+        if current:
+            sentences.append(current)
+
     words_out: list[str] = []
     clause_texts: list[str] = []
-    for clause in clauses:
+    for sentence in sentences:
         texts = []
-        for group in clause:
+        for group in sentence:
             raw = word_from_syllables([d.syllable for d in group])
             word = raw
             if lexicon.lookup_duck(raw) is None:
@@ -288,9 +316,11 @@ def decode_audio(
         end = "?" if texts and texts[-1] == "ki" else "。"
         clause_texts.append(" ".join(texts) + end)
 
+    if not kept:
+        return DecodeResult("", [], [], 0.0, ["只听到句尾的嘎嘎嘎，没有内容"])
     duck = " ".join(clause_texts)
-    confidence = float(np.mean([d.confidence for d in decoded]))
-    result = DecodeResult(duck, words_out, decoded, confidence, warnings)
+    confidence = float(np.mean([d.confidence for d in kept]))
+    result = DecodeResult(duck, words_out, kept, confidence, warnings)
     if translate:
         result.translation = reverse(duck, lexicon=lexicon, phrasebook=phrasebook)
     return result
