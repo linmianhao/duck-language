@@ -1,186 +1,214 @@
+"""采样 + 程序化混合鸭叫合成（源 - 滤波模型）。
+
+- 声源（程序化）：谐波丰富的脉冲序列，基频曲线由走势和时长精确生成 —— 承载信息，保证可解码；
+- 粗糙度（程序化）：20–45 Hz 深度调幅 + 抖动 —— "嘎"的沙哑感；
+- 声道滤波（真实录音）：data/voice_bank.npz 里从真实鸭叫提取的亮 / 暗频谱包络；
+- 起音（真实录音）：真实鸭叫开头约 15 ms 的瞬态，交叉淡入。
+"""
+
 from __future__ import annotations
 
 import wave
+from dataclasses import dataclass
 from datetime import datetime
+from functools import lru_cache
 from pathlib import Path
 
 import numpy as np
 
 from .ir import TranslationResult
+from .lexicon import data_dir
 from .phonology import Syllable, parse_word
 from .prosody import Voice, adjust, get_voice
 
-SR = 44_100
-FORMANTS = {
-    "a": (850.0, 1500.0, 2800.0),
-    "e": (550.0, 1900.0, 2700.0),
-    "i": (320.0, 2300.0, 3100.0),
-    "o": (520.0, 900.0, 2500.0),
-    "u": (360.0, 800.0, 2400.0),
+SR = 48_000
+
+# 时长（秒，tempo = 1 时）；长音 ≥ 2.5 倍短音，解码阈值在两者之间
+SHORT_S = 0.12
+LONG_S = 0.32
+# 静音（秒）：词内音节 / 词间 / 子句间，解码器靠它们切分
+GAP_SYLLABLE = 0.060
+GAP_WORD = 0.200
+GAP_CLAUSE = 0.500
+
+# 走势：基频倍率关键点 (相对时间, 倍率)。降 / 升 首尾相差约 ±8 个半音，平 ≤ 0.5 个半音
+CONTOUR_SHAPES = {
+    "a": ((0.0, 1.25), (1.0, 0.78)),
+    "i": ((0.0, 0.80), (1.0, 1.25)),
+    "o": ((0.0, 1.0), (1.0, 0.98)),
 }
+TARGETS = ("pc", "robot")
 
 
-def _rng(seed: int = 7) -> np.random.Generator:
-    return np.random.default_rng(seed)
+@dataclass(frozen=True)
+class VoiceBank:
+    grid: np.ndarray
+    bright: np.ndarray
+    dark: np.ndarray
+    attacks: np.ndarray
+    from_samples: bool
+
+    def envelope(self, timbre: str) -> np.ndarray:
+        return self.bright if timbre == "k" else self.dark
 
 
-def _formant_envelope(n: int, vowel: str) -> np.ndarray:
-    freqs = np.fft.rfftfreq(n, 1.0 / SR)
-    f1, f2, f3 = FORMANTS.get(vowel, FORMANTS["a"])
-    env = 0.035 + 0.02 / (1.0 + (freqs / 240.0) ** 2)
-    for center, bandwidth, gain in ((f1, 130.0, 1.0), (f2, 190.0, 0.55), (f3, 260.0, 0.25)):
-        env += gain * np.exp(-0.5 * ((freqs - center) / bandwidth) ** 2)
-    return env
+def _builtin_bank() -> VoiceBank:
+    """没有采样库时的程序化包络（两组鸭喙共振峰）。"""
+    grid = np.linspace(0.0, SR / 2, 513)
+
+    def peaks(*bands: tuple[float, float, float]) -> np.ndarray:
+        env = 0.02 + np.zeros_like(grid)
+        for center, width, gain in bands:
+            env += gain * np.exp(-0.5 * ((grid - center) / width) ** 2)
+        return env / env.max()
+
+    bright = peaks((1950, 380, 1.0), (3300, 600, 0.45), (900, 250, 0.15))
+    dark = peaks((1180, 300, 1.0), (2300, 500, 0.35), (600, 200, 0.2))
+    return VoiceBank(grid, bright, dark, np.zeros((0, 0)), from_samples=False)
 
 
-def _source(n: int, f0: float, dur: float, rough: float, rng: np.random.Generator) -> np.ndarray:
-    t = np.arange(n) / SR
-    contour = f0 * (1.0 + 0.13 * np.sin(np.pi * t / max(dur, 1e-6)))
-    contour *= 1.0 + 0.022 * np.sin(2.0 * np.pi * 24.0 * t)
-    phase = 2.0 * np.pi * np.cumsum(contour) / SR
-    source = (
-        np.sin(phase)
-        + 0.55 * np.sin(2.0 * phase)
-        + 0.30 * np.sin(3.0 * phase)
-        + 0.14 * np.sin(4.0 * phase)
-    )
-    source += rough * 0.10 * rng.normal(size=n)
-    return source
+@lru_cache(maxsize=2)
+def load_bank(path: str | None = None) -> VoiceBank:
+    try:
+        bank_path = Path(path) if path else data_dir() / "voice_bank.npz"
+        if bank_path.exists():
+            with np.load(bank_path) as data:
+                return VoiceBank(
+                    grid=data["grid"].astype(np.float64),
+                    bright=data["bright"].astype(np.float64),
+                    dark=data["dark"].astype(np.float64),
+                    attacks=data["attacks"].astype(np.float64),
+                    from_samples=True,
+                )
+    except (OSError, KeyError, ValueError):
+        pass
+    return _builtin_bank()
 
 
-def _lowpass(signal: np.ndarray, width: int = 17) -> np.ndarray:
-    kernel = np.ones(width, dtype=np.float64) / width
-    return np.convolve(signal, kernel, mode="same")
+def syllable_duration(syllable: Syllable) -> float:
+    return (LONG_S if syllable.long else SHORT_S) / syllable.tempo
 
 
-def _nasal(dur: float, f0: float, rng: np.random.Generator) -> np.ndarray:
-    n = max(1, int(SR * dur))
-    t = np.arange(n) / SR
-    hum = 0.45 * np.sin(2.0 * np.pi * f0 * 0.55 * t)
-    hum += 0.18 * np.sin(2.0 * np.pi * f0 * 1.1 * t)
-    hum += 0.05 * rng.normal(size=n)
-    hum = _lowpass(hum)
-    hum *= np.exp(-t / max(dur * 0.7, 1e-6))
-    return hum
+def _f0_curve(syllable: Syllable, voice: Voice, n: int, rng: np.random.Generator) -> np.ndarray:
+    pos = np.linspace(0.0, 1.0, n)
+    points = CONTOUR_SHAPES[syllable.contour]
+    shape = np.interp(pos, [p[0] for p in points], [p[1] for p in points])
+    # 抖动 ≤ ±0.15 个半音，远小于走势阈值
+    wobble = np.convolve(rng.normal(size=n), np.ones(480) / 480, mode="same")
+    wobble = wobble / (np.max(np.abs(wobble)) + 1e-9) * 0.15
+    return voice.f0 * syllable.pitch * shape * 2.0 ** (wobble / 12.0)
 
 
-def _burst(dur: float, low: bool, rng: np.random.Generator) -> np.ndarray:
-    n = max(1, int(SR * dur))
-    t = np.arange(n) / SR
-    noise = rng.normal(size=n)
-    if low:
-        noise = _lowpass(noise, 25)
-        burst = 0.7 * np.sin(2.0 * np.pi * 105.0 * t) + 0.5 * noise
-        return burst * np.exp(-t / 0.010)
-    noise = np.diff(noise, prepend=0.0)
-    return 0.8 * noise * np.exp(-t / 0.007)
+def _source(f0: np.ndarray, rng: np.random.Generator) -> np.ndarray:
+    phase = 2.0 * np.pi * np.cumsum(f0) / SR
+    n_harm = int(11_000 / float(np.max(f0)))
+    source = np.zeros_like(f0)
+    for k in range(1, n_harm + 1):
+        source += np.sin(k * phase) / k**0.7
+    # 每个周期的幅度微抖（shimmer），让声音不那么"电子"
+    shimmer = 1.0 + 0.06 * np.convolve(rng.normal(size=len(f0)), np.ones(96) / 96, mode="same")
+    return source * shimmer
 
 
-def _consonant_onset(onset: str, rng: np.random.Generator) -> np.ndarray:
-    if not onset:
-        return np.zeros(0)
-    if onset.startswith(("k", "g")):
-        return np.concatenate([_burst(0.028, False, rng), np.zeros(int(SR * 0.008))])
-    if onset.startswith("t"):
-        return np.concatenate([_burst(0.018, False, rng) * 0.75, np.zeros(int(SR * 0.006))])
-    if onset.startswith("h"):
-        n = int(SR * 0.045)
-        t = np.arange(n) / SR
-        breath = rng.normal(size=n) * np.exp(-t / 0.022)
-        return np.concatenate([_lowpass(breath, 5) * 0.35, np.zeros(int(SR * 0.006))])
-    if onset.startswith(("p", "b")):
-        return np.concatenate([_burst(0.022, True, rng), np.zeros(int(SR * 0.006))])
-    if onset.startswith("m"):
-        return _nasal(0.050, 120.0, rng)
-    if onset.startswith("n"):
-        return _nasal(0.042, 135.0, rng)
-    if onset.startswith("ʔ"):
-        n = int(SR * 0.018)
-        click = np.zeros(n)
-        click[0] = 0.7
-        return np.concatenate([click, np.zeros(int(SR * 0.012))])
-    if onset.startswith("w") or onset.endswith("w"):
-        n = int(SR * 0.035)
-        t = np.arange(n) / SR
-        return 0.16 * np.sin(2.0 * np.pi * 300.0 * t) * np.exp(-t / 0.022)
-    return np.zeros(0)
-
-
-def _coda_tail(coda: str, rng: np.random.Generator) -> np.ndarray:
-    if not coda:
-        return np.zeros(0)
-    if coda in {"k", "g"}:
-        return np.concatenate([np.zeros(int(SR * 0.006)), _burst(0.024, False, rng) * 0.8])
-    if coda in {"m", "n"}:
-        return _nasal(0.060, 115.0 if coda == "m" else 130.0, rng)
-    if coda == "ʔ":
-        n = int(SR * 0.018)
-        click = np.zeros(n)
-        click[0] = 0.5
-        return np.concatenate([click, np.zeros(int(SR * 0.010))])
-    return np.zeros(0)
-
-
-def _body(
-    syllable: Syllable,
-    voice: Voice,
-    emotion: str,
-    final: bool,
-    rng: np.random.Generator,
-) -> np.ndarray:
-    base = 0.135 if syllable.length < 1.25 else 0.180
-    dur = base * syllable.length / voice.speed
-    n = max(1, int(SR * dur))
-    t = np.arange(n) / SR
-
-    f0 = voice.f0 * syllable.pitch
-    source = _source(n, f0, dur, voice.rough, rng)
-
-    spectrum = np.fft.rfft(source)
-    body = np.fft.irfft(spectrum * _formant_envelope(n, syllable.vowel), n)
-
-    attack = max(1, int(SR * 0.007))
-    amp = np.minimum(1.0, t / (attack / SR))
-    amp *= np.exp(-1.7 * t / max(dur, 1e-6))
-    amp *= 0.84 + 0.16 * np.sin(2.0 * np.pi * 27.0 * t)
-    amp *= 1.0 + 0.22 * np.exp(-0.5 * ((t - 0.56 * dur) / (0.13 * dur + 1e-6)) ** 2)
-    if final and emotion == "question":
-        amp *= 1.0 + 0.25 * (t / max(dur, 1e-6)) ** 2
-
-    body *= amp
-    body = np.tanh((1.25 + 2.2 * voice.rough) * body)
-    peak = float(np.max(np.abs(body))) or 1.0
-    body = body / peak * 0.55 * syllable.volume
-    return body
+def _apply_envelope(signal: np.ndarray, bank: VoiceBank, timbre: str) -> np.ndarray:
+    n = len(signal)
+    n_fft = 1 << int(np.ceil(np.log2(n + 2048)))
+    spec = np.fft.rfft(signal, n_fft)
+    freqs = np.fft.rfftfreq(n_fft, 1.0 / SR)
+    env = np.interp(freqs, bank.grid, bank.envelope(timbre))
+    return np.fft.irfft(spec * env, n_fft)[:n]
 
 
 def synth_syllable(
     syllable: Syllable,
     voice: Voice,
-    emotion: str = "neutral",
     *,
-    final: bool = False,
     seed: int = 7,
+    bank: VoiceBank | None = None,
 ) -> np.ndarray:
-    rng = _rng(seed)
-    onset = _consonant_onset(syllable.onset, rng)
-    body = _body(syllable, voice, emotion, final, rng)
-    coda = _coda_tail(syllable.coda, rng)
-    audio = np.concatenate([part for part in (onset, body, coda) if len(part)])
+    bank = bank or load_bank()
+    rng = np.random.default_rng(seed)
+    dur = syllable_duration(syllable)
+    n = int(SR * dur)
+    t = np.arange(n) / SR
 
-    fade = max(1, int(SR * 0.004))
-    if len(audio) > 2 * fade:
-        audio[:fade] *= np.linspace(0.0, 1.0, fade)
-        audio[-fade:] *= np.linspace(1.0, 0.0, fade)
+    f0 = _f0_curve(syllable, voice, n, rng)
+    body = _source(f0, rng)
 
+    # 调幅：亮音色更深，暗音色更圆
+    depth = (0.55 if syllable.timbre == "k" else 0.3) * min(1.6, syllable.rough)
+    am = 1.0 - depth * (0.5 + 0.5 * np.sin(2.0 * np.pi * voice.am_rate * t + rng.uniform(0, 6.28)))
+    body = body * am
+    body += 0.6 * np.std(body) * rng.normal(size=n) * 0.08  # 气息
+
+    body = _apply_envelope(body, bank, syllable.timbre)
+
+    # 振幅包络：5 ms 起音，尾部 15% 衰减（尾巴太长会让解码器量到的时长和停顿不稳）
+    amp = np.minimum(1.0, t / 0.005)
+    tail = int(n * 0.85)
+    amp[tail:] *= np.linspace(1.0, 0.0, n - tail) ** 1.5
+    body *= amp
+    body /= np.max(np.abs(body)) + 1e-9
+
+    # 真实起音瞬态
+    if bank.attacks.size:
+        attack = bank.attacks[seed % len(bank.attacks)]
+        attack = _apply_envelope(attack, bank, syllable.timbre)
+        attack /= np.max(np.abs(attack)) + 1e-9
+        m = min(len(attack), n)
+        fade = np.linspace(1.0, 0.0, m) ** 2
+        body[:m] = body[:m] * (1.0 - 0.4 * fade) + attack[:m] * 0.4 * fade
+
+    return body / (np.max(np.abs(body)) + 1e-9) * min(1.0, 0.8 * syllable.volume)
+
+
+def _highpass(audio: np.ndarray, cutoff: float) -> np.ndarray:
+    spec = np.fft.rfft(audio)
+    freqs = np.fft.rfftfreq(len(audio), 1.0 / SR)
+    spec *= 1.0 / (1.0 + (cutoff / np.maximum(freqs, 1.0)) ** 4)
+    return np.fft.irfft(spec, len(audio))
+
+
+def render_words(
+    clauses: list[tuple[list[str], str, list[int]]],
+    *,
+    voice: str = "adult",
+    target: str = "pc",
+) -> np.ndarray:
+    """clauses: [(鸭语词列表, 情绪, 每个词的强调等级)]，返回浮点音频。"""
+    if target not in TARGETS:
+        raise ValueError(f"未知输出目标：{target}（可选：{', '.join(TARGETS)}）")
+    preset = get_voice(voice)
+    bank = load_bank()
+    pieces: list[np.ndarray] = []
+    seed = 7
+    for clause_index, (words, emotion, emphasis) in enumerate(clauses):
+        for word_index, word in enumerate(words):
+            syllables = parse_word(word)
+            for syl_index, syllable in enumerate(syllables):
+                adjusted = adjust(syllable, preset, emotion, emphasis=emphasis[word_index])
+                pieces.append(synth_syllable(adjusted, preset, seed=seed, bank=bank))
+                seed += 13
+                if syl_index != len(syllables) - 1:
+                    pieces.append(np.zeros(int(SR * GAP_SYLLABLE / adjusted.tempo)))
+            if word_index != len(words) - 1:
+                pieces.append(np.zeros(int(SR * GAP_WORD)))
+        if clause_index != len(clauses) - 1:
+            pieces.append(np.zeros(int(SR * GAP_CLAUSE)))
+    if not pieces:
+        raise ValueError("没有可合成的鸭语音节。")
+
+    lead = np.zeros(int(SR * 0.05))
+    audio = np.concatenate([lead, *pieces, np.zeros(int(SR * 0.15))])
+    if target == "robot":
+        audio = _highpass(audio, 300.0)
     peak = float(np.max(np.abs(audio))) or 1.0
-    return audio / peak * min(0.7, 0.55 * syllable.volume)
+    return audio / peak * 0.89  # -1 dBFS
 
 
 def write_wav(audio: np.ndarray, path: Path, sr: int = SR) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
-    pcm = np.clip(audio, -1.0, 1.0)
-    pcm = (pcm * 32767.0).astype(np.int16)
+    pcm = (np.clip(audio, -1.0, 1.0) * 32767.0).astype(np.int16)
     with wave.open(str(path), "wb") as wav:
         wav.setnchannels(1)
         wav.setsampwidth(2)
@@ -189,16 +217,19 @@ def write_wav(audio: np.ndarray, path: Path, sr: int = SR) -> Path:
     return path
 
 
-def _default_out_path() -> Path:
-    here = Path(__file__).resolve()
-    project_root = here.parents[2]
+def out_dir() -> Path:
+    project_root = Path(__file__).resolve().parents[2]
     if (project_root / "pyproject.toml").exists():
-        out_dir = project_root / "out"
+        directory = project_root / "out"
     else:
-        out_dir = Path.cwd() / "out"
-    out_dir.mkdir(parents=True, exist_ok=True)
+        directory = Path.cwd() / "out"
+    directory.mkdir(parents=True, exist_ok=True)
+    return directory
+
+
+def _default_out_path() -> Path:
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")[:-3]
-    return out_dir / f"duck-{stamp}.wav"
+    return out_dir() / f"duck-{stamp}.wav"
 
 
 def render_result(
@@ -207,65 +238,44 @@ def render_result(
     voice: str = "adult",
     emotion: str | None = None,
     out_path: Path | None = None,
+    target: str = "pc",
 ) -> Path:
-    preset = get_voice(voice)
-    pieces: list[np.ndarray] = []
-
-    for clause_index, clause in enumerate(result.clauses):
-        clause_emotion = emotion or clause.emotion
-        syllables: list[tuple[Syllable, int]] = []
+    clauses = []
+    for clause in result.clauses:
+        words: list[str] = []
+        emphasis: list[int] = []
         for token in clause.tokens:
             for part in token.text.split():
-                try:
-                    parsed = parse_word(part)
-                except ValueError:
-                    continue
-                for syllable in parsed:
-                    syllables.append((syllable, token.emphasis))
+                words.append(part)
+                emphasis.append(token.emphasis)
+        if words:
+            clauses.append((words, emotion or clause.emotion, emphasis))
+    audio = render_words(clauses, voice=voice, target=target)
+    return write_wav(audio, Path(out_path or _default_out_path()))
 
-        for index, (syllable, emphasis) in enumerate(syllables):
-            adjusted = adjust(
-                syllable,
-                preset,
-                clause_emotion,
-                final=index == len(syllables) - 1,
-                emphasis=emphasis,
-            )
-            audio = synth_syllable(
-                adjusted,
-                preset,
-                clause_emotion,
-                final=index == len(syllables) - 1,
-                seed=7 + clause_index * 31 + index * 7,
-            )
-            pieces.append(audio)
-            if index != len(syllables) - 1:
-                gap = 0.020 if clause_emotion != "soft" else 0.035
-                pieces.append(np.zeros(int(SR * gap), dtype=np.float64))
 
-        pause = 0.28
-        if clause.punctuation == ",":
-            pause = 0.15
-        elif clause.punctuation in "?？":
-            pause = 0.30
-        elif clause.punctuation in "!！":
-            pause = 0.22
-        pieces.append(np.zeros(int(SR * pause), dtype=np.float64))
+def render_duck(
+    duck: str,
+    *,
+    voice: str = "adult",
+    emotion: str = "neutral",
+    out_path: Path | None = None,
+    target: str = "pc",
+) -> Path:
+    """直接合成一段鸭语文本（不经过翻译）。"""
+    from .reverse import _split_clauses
 
-    if not pieces:
-        raise ValueError("没有可合成的鸭语音节。")
-
-    audio = np.concatenate(pieces)
-    peak = float(np.max(np.abs(audio))) or 1.0
-    audio = audio / peak * 0.9
-
-    fade = max(1, int(SR * 0.008))
-    if len(audio) > 2 * fade:
-        audio[:fade] *= np.linspace(0.0, 1.0, fade)
-        audio[-fade:] *= np.linspace(1.0, 0.0, fade)
-
-    path = out_path or _default_out_path()
-    return write_wav(audio, Path(path))
+    clauses = []
+    for body, punct in _split_clauses(duck.lower()):
+        words = body.split()
+        for word in words:
+            parse_word(word)
+        clause_emotion = emotion
+        if emotion == "neutral" and punct in {"?", "？"}:
+            clause_emotion = "question"
+        clauses.append((words, clause_emotion, [0] * len(words)))
+    audio = render_words(clauses, voice=voice, target=target)
+    return write_wav(audio, Path(out_path or _default_out_path()))
 
 
 def render_text(
@@ -275,9 +285,10 @@ def render_text(
     emotion: str | None = None,
     out_path: Path | None = None,
     strict: bool = False,
+    target: str = "pc",
 ) -> tuple[TranslationResult, Path]:
     from .translator import translate
 
     result = translate(text, strict=strict)
-    path = render_result(result, voice=voice, emotion=emotion, out_path=out_path)
+    path = render_result(result, voice=voice, emotion=emotion, out_path=out_path, target=target)
     return result, path

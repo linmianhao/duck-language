@@ -1,82 +1,79 @@
+"""嘎语声学音系：12 个音节 = 音色(k 亮 / w 暗) × 走势(a 降 / i 升 / o 平) × 时长(短 / 长)。
+
+每个音节就是一声鸭叫。音色、走势、时长是信息通道，任何情绪都不能改动它们；
+整体音高、音量、语速、粗糙度属于表情通道，由 prosody 负责。
+"""
+
 from __future__ import annotations
 
+import itertools
 import re
 from dataclasses import dataclass
 
-ONSETS = ("p", "b", "m", "t", "k", "g", "h", "w", "ʔ", "n")
-VOWELS = ("a", "e", "i", "o", "u")
-CODAS = ("k", "m", "n", "ʔ")
-ONSET_CHARS = set(ONSETS)
-VOWEL_CHARS = set(VOWELS)
-CODA_CHARS = set(CODAS)
+TIMBRES = ("k", "w")  # k = 亮"嘎"，w = 暗"呱"
+CONTOURS = ("a", "i", "o")  # a = 降，i = 升，o = 平
+TIMBRE_NAMES = {"k": "亮", "w": "暗"}
+CONTOUR_NAMES = {"a": "降", "i": "升", "o": "平"}
+
+_SYLLABLE_RE = re.compile(r"([kw])([aio])(\2?)")
+_SPLIT_RE = re.compile(r"[\s,.;:!?。，！？；：、]+")
+
 
 @dataclass(frozen=True)
 class Syllable:
-    onset: str
-    vowel: str
-    coda: str
-    length: float = 1.0
+    timbre: str
+    contour: str
+    long: bool = False
+    # 表情通道：不改变音节身份
     pitch: float = 1.0
     volume: float = 1.0
-    emphasis: int = 0
+    tempo: float = 1.0
+    rough: float = 1.0
 
     @property
     def text(self) -> str:
-        return f"{self.onset}{self.vowel}{self.coda}"
+        return f"{self.timbre}{self.contour * (2 if self.long else 1)}"
+
+    @property
+    def features(self) -> tuple[str, str, bool]:
+        return (self.timbre, self.contour, self.long)
+
+    @property
+    def description(self) -> str:
+        return f"{TIMBRE_NAMES[self.timbre]}{CONTOUR_NAMES[self.contour]}{'长' if self.long else '短'}"
 
 
-def _syllabify_part(part: str) -> list[Syllable]:
-    syllables: list[Syllable] = []
-    index = 0
-    while index < len(part):
-        onset = ""
-        if part[index] in ONSET_CHARS:
-            onset = part[index]
-            index += 1
-            if index < len(part) and part[index] == "w" and onset != "w":
-                onset += "w"
-                index += 1
-
-        if index >= len(part) or part[index] not in VOWEL_CHARS:
-            raise ValueError(f"非法鸭语音节：{part!r}")
-        vowel = part[index]
-        index += 1
-
-        coda = ""
-        if index < len(part) and part[index] in CODA_CHARS:
-            next_is_vowel = index + 1 < len(part) and part[index + 1] in VOWEL_CHARS
-            next_is_glide = (
-                index + 2 < len(part)
-                and part[index + 1] == "w"
-                and part[index + 2] in VOWEL_CHARS
-            )
-            if not next_is_vowel and not next_is_glide:
-                coda = part[index]
-                index += 1
-
-        syllables.append(Syllable(onset=onset, vowel=vowel, coda=coda))
-    return syllables
+ALL_SYLLABLES: tuple[Syllable, ...] = tuple(
+    Syllable(t, c, long) for t, long, c in itertools.product(TIMBRES, (False, True), CONTOURS)
+)
 
 
 def parse_word(word: str) -> list[Syllable]:
-    """把一个鸭语词拆成音节。支持用 - 连接的复合词和连续音节。"""
+    """把一个鸭语词拆成音节；非法时抛出 ValueError。"""
     cleaned = word.strip(" \t\r\n.,!?;:。！？；：、")
     if not cleaned:
         return []
-
     syllables: list[Syllable] = []
-    for part in cleaned.split("-"):
-        if part:
-            syllables.extend(_syllabify_part(part))
+    pos = 0
+    for match in _SYLLABLE_RE.finditer(cleaned):
+        if match.start() != pos:
+            break
+        syllables.append(Syllable(match.group(1), match.group(2), bool(match.group(3))))
+        pos = match.end()
+    if pos != len(cleaned):
+        raise ValueError(f"非法鸭语词：{word!r}")
     return syllables
+
+
+def split_words(text: str) -> list[str]:
+    return [token for token in _SPLIT_RE.split(text) if token]
 
 
 def parse_text(text: str) -> list[Syllable]:
     """拆解整句鸭语，忽略标点和空白。"""
     syllables: list[Syllable] = []
-    for token in re.split(r"[\s,.;:!?。！？；：、]+", text):
-        if token:
-            syllables.extend(parse_word(token))
+    for token in split_words(text):
+        syllables.extend(parse_word(token))
     return syllables
 
 
@@ -88,6 +85,20 @@ def is_valid_word(word: str) -> bool:
 
 
 def validate_text(text: str) -> None:
-    for token in re.split(r"[\s,.;:!?。！？；：、]+", text):
-        if token:
-            parse_word(token)
+    for token in split_words(text):
+        parse_word(token)
+
+
+def word_from_syllables(syllables: list[Syllable]) -> str:
+    return "".join(s.text for s in syllables)
+
+
+def feature_distance(a: str, b: str) -> int:
+    """两个词之间不同的声学特征个数；音节数不同时视为无穷远。"""
+    sa, sb = parse_word(a), parse_word(b)
+    if len(sa) != len(sb):
+        return 99
+    return sum(
+        (x.timbre != y.timbre) + (x.contour != y.contour) + (x.long != y.long)
+        for x, y in zip(sa, sb, strict=True)
+    )

@@ -19,6 +19,9 @@ duck = "ducklang.cli:app"
 duck-web = "ducklang.web:main"
 
 [dependency-groups]
+tools = [
+    "soundfile>=0.12",
+]
 dev = [
     "httpx>=0.28.1",
     "pytest>=8.3",

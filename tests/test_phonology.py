@@ -1,38 +1,46 @@
-from ducklang.phonology import parse_text, parse_word, validate_text
+import pytest
+
+from ducklang.phonology import (
+    ALL_SYLLABLES,
+    feature_distance,
+    parse_text,
+    parse_word,
+    validate_text,
+)
 
 
-def test_parse_simple_word():
-    syllables = parse_word("mama")
-    assert [s.text for s in syllables] == ["ma", "ma"]
+def test_twelve_syllables():
+    texts = {s.text for s in ALL_SYLLABLES}
+    assert len(texts) == 12
+    assert texts == {
+        "ka", "ki", "ko", "kaa", "kii", "koo", "wa", "wi", "wo", "waa", "wii", "woo",
+    }
 
 
-def test_parse_compound_and_glottal_stop():
-    syllables = parse_word("kwaʔ-ʔo-wa")
-    assert [s.text for s in syllables] == ["kwaʔ", "ʔo", "wa"]
+def test_parse_compound_word_is_unambiguous():
+    syllables = parse_word("kiiwa")
+    assert [s.text for s in syllables] == ["kii", "wa"]
+    assert syllables[0].features == ("k", "i", True)
+    assert syllables[1].description == "暗降短"
 
 
-def test_parse_question_punctuation_is_ignored():
-    syllables = parse_text("na wi ha?")
-    assert [s.text for s in syllables] == ["na", "wi", "ha"]
+def test_parse_text_ignores_punctuation():
+    assert [s.text for s in parse_text("wa wi ki?")] == ["wa", "wi", "ki"]
 
 
-def test_invalid_syllable_raises():
-    try:
-        parse_word("sak")
-    except ValueError:
-        return
-    raise AssertionError("sak should be invalid")
+@pytest.mark.parametrize("bad", ["ma", "kaaa", "kwa", "ʔo", "kak", "k"])
+def test_invalid_words_raise(bad):
+    with pytest.raises(ValueError):
+        parse_word(bad)
+
+
+def test_feature_distance():
+    assert feature_distance("ka", "ka") == 0
+    assert feature_distance("ka", "wa") == 1
+    assert feature_distance("ka", "wii") == 3
+    assert feature_distance("ka", "kawa") == 99
 
 
 def test_known_sentences_are_valid():
-    for text in (
-        "ma mam ʔi。",
-        "na num ko ha?",
-        "ʔo-wa ba。",
-        "ti kak!",
-        "mama wa ki ba。",
-        "ʔok-ʔok kwa。",
-        "kwaʔ-ka-pe",
-        "ti-ʔo wi。",
-    ):
+    for text in ("ka wakaa kii。", "wa waka koo ki?", "kaakaa!", "kowa kowa kika kowi ki?"):
         validate_text(text)

@@ -443,6 +443,75 @@
       text-align: center;
     }
 
+    .modes {
+      display: inline-flex;
+      gap: 4px;
+      margin-bottom: 16px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 4px;
+      background: rgba(255, 255, 255, 0.6);
+    }
+
+    .mode {
+      border: 0;
+      border-radius: 10px;
+      padding: 8px 14px;
+      background: transparent;
+      color: var(--muted);
+      font-weight: 700;
+      font-size: 14px;
+    }
+
+    .mode[aria-pressed="true"] {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    .listen-box {
+      display: grid;
+      gap: 12px;
+      border: 1px dashed rgba(31, 111, 92, 0.35);
+      border-radius: 18px;
+      padding: 18px;
+      background: #fffef9;
+    }
+
+    .listen-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .listen-row .ghost {
+      padding: 11px 16px;
+    }
+
+    .file-name {
+      color: var(--muted);
+      font-size: 13px;
+      overflow-wrap: anywhere;
+    }
+
+    .recording {
+      border-color: var(--danger) !important;
+      color: var(--danger) !important;
+    }
+
+    .zh-text {
+      margin: 16px 0 4px;
+      font-size: clamp(22px, 3vw, 30px);
+      font-weight: 700;
+      line-height: 1.4;
+    }
+
+    .meta {
+      margin: 0 0 12px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
     [hidden] {
       display: none !important;
     }
@@ -540,22 +609,41 @@
       <div>
         <p class="eyebrow">DUCK LANGUAGE LAB</p>
         <h1>嘎语翻译器</h1>
-        <p class="subtitle">把中文变成鸭子听得懂、也发得出的声音。输入一句话，听它嘎给你听。</p>
+        <p class="subtitle">中文和嘎语互译，鸭叫声还能再听回中文。每一声"嘎"的明暗、升降、长短都带着意思。</p>
       </div>
     </header>
 
     <div class="workspace">
       <section class="panel" aria-labelledby="input-title">
+        <div class="modes" role="group" aria-label="翻译方向">
+          <button class="mode" type="button" data-mode="zh" aria-pressed="true">中 → 鸭</button>
+          <button class="mode" type="button" data-mode="duck" aria-pressed="false">鸭 → 中</button>
+          <button class="mode" type="button" data-mode="listen" aria-pressed="false">听 → 中</button>
+        </div>
+
         <label class="field-label" id="input-title" for="text">中文输入</label>
         <textarea id="text" maxlength="500" autocomplete="off" spellcheck="false" placeholder="例如：你好吗？我饿了，我们去水边吧。"></textarea>
 
+        <div class="listen-box" id="listen-box" hidden>
+          <div class="listen-row">
+            <button class="ghost" id="pick" type="button">选择 WAV 文件</button>
+            <button class="ghost" id="record" type="button">🎙 录音</button>
+            <input type="file" id="file" accept=".wav,audio/wav" hidden>
+          </div>
+          <span class="file-name" id="file-name">支持 16-bit PCM WAV。可以录下机器人播放的鸭叫，再翻回中文。</span>
+        </div>
+
         <div class="examples" aria-label="示例">
-          <button class="chip" type="button" data-text="你好吗？">你好吗？</button>
-          <button class="chip" type="button" data-text="我饿了">我饿了</button>
-          <button class="chip" type="button" data-text="我喜欢你">我喜欢你</button>
-          <button class="chip" type="button" data-text="危险！">危险！</button>
-          <button class="chip" type="button" data-text="明天要下雨">明天要下雨</button>
-          <button class="chip" type="button" data-text="我们去水边吧">我们去水边吧</button>
+          <button class="chip" type="button" data-mode="zh" data-text="你好吗？">你好吗？</button>
+          <button class="chip" type="button" data-mode="zh" data-text="我饿了">我饿了</button>
+          <button class="chip" type="button" data-mode="zh" data-text="你去哪里？">你去哪里？</button>
+          <button class="chip" type="button" data-mode="zh" data-text="危险！">危险！</button>
+          <button class="chip" type="button" data-mode="zh" data-text="明天要下雨">明天要下雨</button>
+          <button class="chip" type="button" data-mode="zh" data-text="我们去水边吧">我们去水边吧</button>
+          <button class="chip" type="button" data-mode="duck" data-text="wa waka koo ki?" hidden>wa waka koo ki?</button>
+          <button class="chip" type="button" data-mode="duck" data-text="kaka waa woko wiiko" hidden>kaka waa woko wiiko</button>
+          <button class="chip" type="button" data-mode="duck" data-text="kaakaa!" hidden>kaakaa!</button>
+          <button class="chip" type="button" data-mode="duck" data-text="ka ki ko kaa kii koo" hidden>12 音节（亮）</button>
         </div>
 
         <div class="controls">
@@ -581,10 +669,19 @@
           </div>
         </div>
 
-        <label class="check">
-          <input type="checkbox" id="autoplay" checked>
-          生成后自动播放
-        </label>
+        <div class="controls" id="target-row">
+          <div class="control">
+            <label for="target">播放设备</label>
+            <select id="target">
+              <option value="pc" selected>电脑</option>
+              <option value="robot">机器人喇叭</option>
+            </select>
+          </div>
+          <label class="check">
+            <input type="checkbox" id="autoplay" checked>
+            生成后自动播放
+          </label>
+        </div>
 
         <div class="actions">
           <button class="primary" id="go" type="button">翻译并嘎一声</button>
@@ -596,10 +693,12 @@
 
       <section class="result" id="result" aria-live="polite" hidden>
         <div class="result-head">
-          <h2>嘎语</h2>
+          <h2 id="result-title">嘎语</h2>
           <button class="ghost small" id="copy" type="button">复制</button>
         </div>
+        <p class="zh-text" id="zh" hidden></p>
         <p class="duck-text" id="duck"></p>
+        <p class="meta" id="meta" hidden></p>
         <p class="gloss" id="gloss"></p>
         <div class="warnings" id="warnings"></div>
         <audio id="audio" controls preload="metadata"></audio>
@@ -614,11 +713,11 @@
 
       <section class="result" id="placeholder">
         <h2>怎么说</h2>
-        <p class="empty"><strong>先输入一句中文。</strong>翻译结果、逐词直译和鸭子叫声会出现在这里。未收录的词会自动转写成合法鸭语音节，并标上借词记号。</p>
+        <p class="empty"><strong>先输入一句中文。</strong>翻译结果、逐词直译和鸭子叫声会出现在这里。嘎语只有约 60 个词，未收录的词会换成"东西 / 人 / 做"并提示。</p>
       </section>
     </div>
 
-    <footer>本地运行 · 离线翻译 · 程序化鸭叫合成</footer>
+    <footer>本地运行 · 离线翻译 · 真实鸭叫音色 + 程序化合成 · 可解码</footer>
   </main>
 
   <script>
@@ -647,7 +746,7 @@
     function setLoading(loading) {
       const button = $("go");
       button.disabled = loading;
-      button.textContent = loading ? "正在嘎…" : "翻译并嘎一声";
+      button.textContent = loading ? "正在嘎…" : MODES[mode].button;
     }
 
     function fillSelect(select, items, includeAuto = false) {
@@ -699,14 +798,48 @@
       }
     }
 
+    const MODES = {
+      zh: { label: "中文输入", placeholder: "例如：你好吗？我饿了，我们去水边吧。", button: "翻译并嘎一声", empty: "先输入一句中文。" },
+      duck: { label: "嘎语输入", placeholder: "例如：wa waka koo ki?（音节：k 亮 / w 暗，a 降 / i 升 / o 平，双写元音 = 长）", button: "翻成中文", empty: "先输入一句嘎语。" },
+      listen: { label: "鸭叫录音", placeholder: "", button: "听懂这段鸭叫", empty: "先选择或录一段鸭叫。" }
+    };
+    let mode = "zh";
+    let audioBlob = null;
+
+    function setMode(next) {
+      mode = next;
+      document.querySelectorAll(".mode").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.mode === mode)));
+      document.querySelectorAll(".chip").forEach((c) => { c.hidden = c.dataset.mode !== mode; });
+      $("input-title").textContent = MODES[mode].label;
+      $("text").placeholder = MODES[mode].placeholder;
+      $("text").hidden = mode === "listen";
+      $("listen-box").hidden = mode !== "listen";
+      $("target-row").hidden = mode === "listen";
+      $("go").textContent = MODES[mode].button;
+      setStatus(mode === "listen" ? "录音或上传 WAV 后点击按钮。" : "Ctrl + Enter 也可以直接翻译。");
+    }
+
     function render(data, remember = true) {
+      const kind = data.kind || "zh";
       $("result").hidden = false;
       $("placeholder").hidden = true;
-      $("duck").textContent = data.duck;
+      $("result-title").textContent = kind === "zh" ? "嘎语" : "中文";
+      $("zh").hidden = kind === "zh";
+      $("zh").textContent = data.zh || "";
+      $("duck").textContent = data.duck || "";
+      $("meta").hidden = kind !== "listen";
+      $("meta").textContent = kind === "listen" ? `置信度 ${(data.confidence * 100).toFixed(0)}% · ${data.syllables.length} 个音节` : "";
       $("gloss").textContent = data.gloss ? `直译：${data.gloss}` : "";
-      $("audio").src = data.audio_url;
-      $("download").href = data.audio_url;
-      $("download").setAttribute("download", "duck.wav");
+      const hasAudio = Boolean(data.audio_url);
+      $("audio").hidden = !hasAudio;
+      $("download").hidden = !hasAudio;
+      if (hasAudio) {
+        $("audio").src = data.audio_url;
+        $("download").href = data.audio_url;
+        $("download").setAttribute("download", "duck.wav");
+      } else {
+        $("audio").removeAttribute("src");
+      }
 
       const warnings = $("warnings");
       warnings.innerHTML = "";
@@ -740,7 +873,7 @@
 
         const zh = document.createElement("span");
         zh.className = "zh";
-        zh.textContent = item.source;
+        zh.textContent = item.kind === "zh" ? item.source : item.zh;
 
         const duck = document.createElement("span");
         duck.className = "duck";
@@ -748,53 +881,83 @@
 
         button.append(zh, duck);
         button.addEventListener("click", () => {
-          $("text").value = item.source;
           render(item, false);
-          play(item.audio_url);
-          setStatus(`已重播：${item.source}`);
+          if (item.audio_url) play(item.audio_url);
+          setStatus("已重新显示。");
         });
         list.append(button);
       }
     }
 
+    async function request(url, options) {
+      const response = await fetch(url, options);
+      let data = {};
+      try {
+        data = await response.json();
+      } catch {
+        data = {};
+      }
+      if (!response.ok) {
+        const detail = data.detail;
+        throw new Error(typeof detail === "string" ? detail : "请求失败，请检查输入。");
+      }
+      return data;
+    }
+
     async function run() {
       const text = $("text").value.trim();
-      if (!text) {
+      if (mode !== "listen" && !text) {
         $("text").focus();
-        setStatus("先输入一句中文。", true);
+        setStatus(MODES[mode].empty, true);
+        return;
+      }
+      if (mode === "listen" && !audioBlob) {
+        setStatus(MODES.listen.empty, true);
         return;
       }
 
       setLoading(true);
-      setStatus("正在翻译并合成鸭叫…");
       try {
-        const response = await fetch("/api/translate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            text,
-            voice: $("voice").value,
-            emotion: $("emotion").value || null
-          })
-        });
-
-        let data = {};
-        try {
-          data = await response.json();
-        } catch {
-          data = {};
-        }
-
-        if (!response.ok) {
-          const detail = data.detail;
-          throw new Error(typeof detail === "string" ? detail : "请求失败，请检查输入。");
+        let data;
+        const options = {
+          voice: $("voice").value,
+          emotion: $("emotion").value || null,
+          target: $("target").value
+        };
+        if (mode === "zh") {
+          setStatus("正在翻译并合成鸭叫…");
+          data = await request("/api/translate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text, ...options })
+          });
+          data.kind = "zh";
+        } else if (mode === "duck") {
+          setStatus("正在翻成中文…");
+          data = await request("/api/reverse", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text, ...options })
+          });
+          data.kind = "duck";
+          data.duck = data.source;
+        } else {
+          setStatus("正在听…");
+          data = await request("/api/decode", {
+            method: "POST",
+            headers: { "Content-Type": "audio/wav" },
+            body: audioBlob
+          });
+          data.kind = "listen";
+          data.audio_url = URL.createObjectURL(audioBlob);
         }
 
         render(data);
-        const duration = Number(data.duration || 0).toFixed(2);
-        setStatus(`已生成 ${duration} 秒鸭叫。`);
-        if ($("autoplay").checked) {
-          play(data.audio_url);
+        if (data.kind === "listen") {
+          setStatus(data.duck ? "听懂了。" : "没有听出鸭叫。", !data.duck);
+        } else {
+          setStatus(data.audio_url ? `已生成 ${Number(data.duration || 0).toFixed(2)} 秒鸭叫。` : "已翻译。");
+          if (data.audio_url && $("autoplay").checked) play(data.audio_url);
         }
       } catch (error) {
         setStatus(error.message || "翻译失败，请稍后再试。", true);
@@ -803,6 +966,78 @@
       }
     }
 
+    // ---- 录音：采集原始 PCM，编码成 16-bit WAV ----
+    let recorder = null;
+
+    function encodeWav(chunks, sampleRate) {
+      const length = chunks.reduce((n, c) => n + c.length, 0);
+      const buffer = new ArrayBuffer(44 + length * 2);
+      const view = new DataView(buffer);
+      const write = (offset, s) => { for (let i = 0; i < s.length; i++) view.setUint8(offset + i, s.charCodeAt(i)); };
+      write(0, "RIFF"); view.setUint32(4, 36 + length * 2, true); write(8, "WAVE");
+      write(12, "fmt "); view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true);
+      view.setUint32(24, sampleRate, true); view.setUint32(28, sampleRate * 2, true);
+      view.setUint16(32, 2, true); view.setUint16(34, 16, true);
+      write(36, "data"); view.setUint32(40, length * 2, true);
+      let offset = 44;
+      for (const chunk of chunks) {
+        for (let i = 0; i < chunk.length; i++, offset += 2) {
+          const s = Math.max(-1, Math.min(1, chunk[i]));
+          view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+        }
+      }
+      return new Blob([buffer], { type: "audio/wav" });
+    }
+
+    async function toggleRecord() {
+      if (recorder) {
+        recorder.stop();
+        return;
+      }
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+        });
+        const context = new AudioContext();
+        const source = context.createMediaStreamSource(stream);
+        const node = context.createScriptProcessor(4096, 1, 1);
+        const chunks = [];
+        node.onaudioprocess = (event) => chunks.push(new Float32Array(event.inputBuffer.getChannelData(0)));
+        source.connect(node);
+        node.connect(context.destination);
+        recorder = {
+          stop() {
+            node.disconnect();
+            source.disconnect();
+            stream.getTracks().forEach((t) => t.stop());
+            audioBlob = encodeWav(chunks, context.sampleRate);
+            context.close();
+            recorder = null;
+            $("record").textContent = "🎙 录音";
+            $("record").classList.remove("recording");
+            $("file-name").textContent = `录音 ${(audioBlob.size / 1024).toFixed(0)} KB`;
+            run();
+          }
+        };
+        $("record").textContent = "■ 停止并识别";
+        $("record").classList.add("recording");
+        setStatus("正在录音…");
+      } catch {
+        setStatus("无法打开麦克风。", true);
+      }
+    }
+
+    $("record").addEventListener("click", toggleRecord);
+    $("pick").addEventListener("click", () => $("file").click());
+    $("file").addEventListener("change", () => {
+      const file = $("file").files[0];
+      if (!file) return;
+      audioBlob = file;
+      $("file-name").textContent = file.name;
+      run();
+    });
+    document.querySelectorAll(".mode").forEach((b) => b.addEventListener("click", () => setMode(b.dataset.mode)));
+
     $("go").addEventListener("click", run);
 
     $("clear").addEventListener("click", () => {
@@ -810,12 +1045,14 @@
       $("result").hidden = true;
       $("placeholder").hidden = false;
       $("audio").removeAttribute("src");
+      audioBlob = null;
+      $("file").value = "";
       $("text").focus();
-      setStatus("Ctrl + Enter 也可以直接翻译。");
+      setMode(mode);
     });
 
     $("copy").addEventListener("click", async () => {
-      const text = $("duck").textContent;
+      const text = $("zh").hidden ? $("duck").textContent : $("zh").textContent;
       if (!text) return;
       try {
         await navigator.clipboard.writeText(text);

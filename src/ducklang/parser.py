@@ -5,53 +5,49 @@ import re
 
 import jieba
 
-from .ir import Frame
+from .ir import Frame, NounPhrase
 from .lexicon import Lexicon
 
-_jieba_ready = False
+_jieba_ready: set[int] = set()
 
-PRONOUNS = {
-    "我", "我们", "咱们", "你", "您", "你们", "他", "她", "它",
-    "他们", "她们", "它们", "大家", "自己",
-}
-NEGATIONS = {"不", "没", "没有", "别", "不要", "不能", "不会", "未", "无"}
-NEG_HAVE = {"没有"}
-NEG_MODAL = {"不能", "不会"}
+NEGATIONS = {"不", "没", "没有", "别", "不要", "不能", "不会", "未", "无", "不用"}
 PERF = {"了", "过", "已经", "曾经"}
-FUT_TIME = {"明天", "以后", "下次", "将来", "待会", "马上", "将要"}
-WANT_OR_FUT = {"要", "想", "想要"}
-MODAL_OR_FUT = {"会"}
-MODALS = {"能", "可以"}
+FUT = {"会", "将", "将要", "快要"}
+WANT = {"要", "想", "想要", "需要"}
 COPULA = {"是"}
-HAVE = {"有"}
-PREPS = {"在", "到", "往", "向", "从"}
-INTENS = {"很", "太", "非常", "特别", "真的", "真", "十分"}
+PREPS = {"在", "到", "往", "向"}
+PARTNER = {"和", "跟", "与", "同"}
+INTENS = {"很", "太", "非常", "特别", "真的", "真", "十分", "超", "好"}
+STRONG_INTENS = {"太", "非常", "特别", "十分", "超"}
 QUESTION_PARTICLES = {"吗", "呢", "么"}
-MEASURE = {"个", "只", "条", "杯", "碗", "点", "些", "位", "名", "张", "件", "颗", "朵", "群"}
+NUM_ONE = {"一", "1"}
+MEASURE = {"个", "只", "条", "杯", "碗", "点", "些", "位", "名", "张", "件", "颗", "朵", "群", "头"}
+# 吞掉不报警的虚词
 STOP = {
-    "的", "地", "得", "和", "跟", "与", "把", "被", "给", "让", "着",
-    "啊", "呀", "哦", "啦", "嘛", "吧", "边", "里", "中", "外", "上",
-    "下", "前", "后", "面", "旁", "就", "也", "都", "还", "又", "再",
+    "的", "地", "得", "着", "啊", "呀", "哦", "啦", "嘛", "吧", "哇", "呗",
+    "边", "里", "中", "外", "上", "下", "前", "后", "面", "旁", "从",
+    "就", "也", "都", "还", "又", "再", "把", "被", "让", "能", "可以", "请", "一起", "一下",
 }
 CONJUNCTIONS = {"因为", "所以", "但是", "可是", "不过", "然后", "而且", "如果", "那么"}
-PLACE_WORDS = {
-    "水", "河", "湖", "池塘", "水塘", "家", "窝", "巢", "房子", "这里",
-    "这儿", "那里", "那", "这", "外面", "里面", "河边", "水边",
-}
+WEATHER = {"下雨", "雨"}
+GO_VERBS = {"wiiko", "wiki"}
 SPLIT_RE = re.compile(
     r"([。！？!?；;，,.\n、]|因为|所以|但是|可是|不过|然后|而且|如果)"
+)
+FUNCTION_WORDS = (
+    NEGATIONS | PERF | FUT | WANT | COPULA | PREPS | PARTNER | INTENS
+    | QUESTION_PARTICLES | MEASURE | STOP | CONJUNCTIONS
 )
 
 
 def _ensure_jieba(lexicon: Lexicon) -> None:
-    global _jieba_ready
-    if _jieba_ready:
+    if id(lexicon) in _jieba_ready:
         return
     jieba.setLogLevel(logging.ERROR)
-    for word in lexicon.zh_words:
+    for word in list(lexicon.zh_words) + list(FUNCTION_WORDS):
         if len(word) > 1:
             jieba.add_word(word, freq=100_000)
-    _jieba_ready = True
+    _jieba_ready.add(id(lexicon))
 
 
 def normalize_text(text: str) -> str:
@@ -67,7 +63,6 @@ def split_clauses(text: str) -> list[tuple[str, str]]:
     parts = SPLIT_RE.split(normalize_text(text))
     clauses: list[tuple[str, str]] = []
     buffer = ""
-
     for part in parts:
         if not part:
             continue
@@ -78,7 +73,6 @@ def split_clauses(text: str) -> list[tuple[str, str]]:
             buffer = ""
         else:
             buffer += part
-
     clause = _strip_leading_conjunctions(buffer)
     if clause:
         clauses.append((clause, "。"))
@@ -86,9 +80,9 @@ def split_clauses(text: str) -> list[tuple[str, str]]:
 
 
 def _normalize_punct(punct: str) -> str:
-    if punct in CONJUNCTIONS:
+    if punct in CONJUNCTIONS or punct in ";；、":
         return ","
-    if punct in ".。":
+    if punct in ".。\n":
         return "。"
     return punct
 
@@ -98,40 +92,36 @@ def _strip_leading_conjunctions(text: str) -> str:
     changed = True
     while changed:
         changed = False
-        for word in CONJUNCTIONS | {"就", "那", "还有"}:
+        for word in CONJUNCTIONS | {"就", "那么", "还有"}:
             if text.startswith(word):
                 text = text[len(word):].strip()
                 changed = True
     return text
 
 
+NUM_RE = re.compile(r"^([一二两三四五六七八九十几百千俩\d]+)(" + "|".join(MEASURE) + ")?$")
+
+
 def _known_vocabulary(lexicon: Lexicon) -> set[str]:
-    known = set(lexicon.zh_words)
-    known |= PRONOUNS | NEGATIONS | PERF | FUT_TIME | WANT_OR_FUT | MODAL_OR_FUT
-    known |= MODALS | COPULA | HAVE | PREPS | INTENS | QUESTION_PARTICLES
-    known |= MEASURE | STOP | CONJUNCTIONS | PLACE_WORDS
-    known |= {"一", "二", "两", "三", "四", "五", "六", "七", "八", "九", "十"}
-    return known
+    # 数字和量词不参与拆分未知词，避免"张三"被拆成"张 / 三"
+    return set(lexicon.zh_words) | (FUNCTION_WORDS - MEASURE)
 
 
 def _split_token(token: str, known: set[str]) -> list[str]:
     if token in known:
         return [token]
-
     parts: list[str] = []
     index = 0
     while index < len(token):
         match = None
         for end in range(len(token), index, -1):
-            candidate = token[index:end]
-            if candidate in known:
-                match = candidate
+            if token[index:end] in known:
+                match = token[index:end]
                 break
         if match is not None:
             parts.append(match)
             index += len(match)
             continue
-
         start = index
         index += 1
         while index < len(token):
@@ -139,117 +129,82 @@ def _split_token(token: str, known: set[str]) -> list[str]:
                 break
             index += 1
         parts.append(token[start:index])
+    # 只由单字拆出来的"已知词"不可信（例如人名），整体当作未知词
+    if len(token) > 1 and all(len(p) == 1 for p in parts) and any(p not in known for p in parts):
+        return [token]
     return parts
 
 
 def tokenize(text: str, lexicon: Lexicon) -> list[str]:
     _ensure_jieba(lexicon)
-    raw = jieba.lcut(text.strip())
     known = _known_vocabulary(lexicon)
     tokens: list[str] = []
-    for token in raw:
+    for token in jieba.lcut(text.strip()):
         token = token.strip()
-        if not token:
+        if not token or re.fullmatch(r"[\W_]+", token, flags=re.UNICODE):
             continue
-        if re.fullmatch(r"[\W_]+", token, flags=re.UNICODE):
-            continue
-        if token in {"，", "。", "！", "？", "；", "：", "、", ",", ".", "!", "?", ";", ":"}:
+        number = NUM_RE.match(token)
+        if number:
+            tokens.extend(part for part in number.groups() if part)
             continue
         tokens.extend(_split_token(token, known))
     return tokens
 
 
 def classify(token: str, lexicon: Lexicon) -> str:
-    if token.isdigit():
-        return "num"
-    if token in PRONOUNS:
-        return "pron"
-    if token in NEG_HAVE:
-        return "neg_have"
-    if token in NEG_MODAL:
-        return "neg_modal"
+    if token in NUM_ONE:
+        return "one"
+    if NUM_RE.match(token) and not NUM_RE.match(token).group(2):
+        return "many"
+    if token == "们":
+        return "plural"
     if token in NEGATIONS:
         return "neg"
     if token in QUESTION_PARTICLES:
-        return "particle"
-    if token in MEASURE:
-        return "measure"
+        return "qparticle"
     if token in PERF:
         return "perf"
-    if token in FUT_TIME:
+    if token in FUT:
         return "fut"
-    if token in WANT_OR_FUT:
-        return "want_or_fut"
-    if token in MODAL_OR_FUT:
-        return "modal_or_fut"
-    if token in MODALS:
-        return "modal"
+    if token in WANT:
+        return "want"
     if token in COPULA:
         return "copula"
-    if token in HAVE:
-        return "have"
     if token in PREPS:
         return "prep"
-    if token in INTENS:
-        return "intensity"
-    if token in STOP:
+    if token in PARTNER:
+        return "partner"
+    if token in MEASURE or token in STOP:
         return "stop"
-
+    if token in INTENS and token != "好":
+        return "intensity"
     word = lexicon.lookup_base(token)
     if word is None:
         return "unknown"
     return {
-        "pron": "pron",
-        "n": "noun",
-        "v": "verb",
-        "stative": "stative",
-        "q": "q",
-        "num": "num",
-        "quant": "quant",
-        "neg": "neg",
-        "particle": "particle",
-        "aspect": "perf",
-        "postp": "prep",
-        "interj": "interj",
-    }.get(word.pos, "unknown")
+        "pron": "noun", "n": "noun", "q": "q", "v": "verb",
+        "stative": "stative", "time": "time",
+    }.get(word.pos, "stop")
 
 
 def detect_emotion(text: str, punct: str, is_question: bool = False) -> str:
-    if any(word in text for word in ("危险", "救命", "小心", "快跑", "别", "不要")):
+    if any(word in text for word in ("危险", "救命", "小心", "快跑", "别")):
         return "alarm"
-    if punct == "!" or "！" in punct:
+    if punct == "!":
         return "excited"
-    if is_question or punct in "?？":
+    if is_question:
         return "question"
-    if any(word in text for word in ("喜欢", "爱", "谢谢", "抱", "亲", "贴", "乖", "晚安")):
+    if any(word in text for word in ("喜欢", "爱", "谢谢", "抱", "亲", "乖", "晚安")):
         return "soft"
     return "neutral"
 
 
-def _duck_of(zh: str, lexicon: Lexicon) -> str | None:
-    word = lexicon.lookup_base(zh)
+def _duck(zh: str | None, lexicon: Lexicon) -> str | None:
+    word = lexicon.lookup_base(zh) if zh else None
     return word.duck if word else None
 
 
-def is_place(zh: str | None, lexicon: Lexicon) -> bool:
-    if not zh:
-        return False
-    if zh in PLACE_WORDS:
-        return True
-    duck = _duck_of(zh, lexicon)
-    return duck in {"wa", "nu", "wa-nu", "ti", "ta"}
-
-
-def is_go(zh: str | None, lexicon: Lexicon) -> bool:
-    return _duck_of(zh or "", lexicon) == "ba"
-
-
-def parse_clause(
-    text: str,
-    punctuation: str,
-    lexicon: Lexicon,
-    strict: bool = False,
-) -> Frame:
+def parse_clause(text: str, punctuation: str, lexicon: Lexicon) -> Frame:
     tokens = tokenize(text, lexicon)
     frame = Frame(source=text, punctuation=punctuation or "。")
     if not tokens:
@@ -257,232 +212,127 @@ def parse_clause(
         return frame
 
     tagged = [(token, classify(token, lexicon)) for token in tokens]
-    frame.raw = list(tokens)
-
-    subject: str | None = None
-    obj: str | None = None
-    place: str | None = None
-    verb: str | None = None
-    complement_verb: str | None = None
-    adjective: str | None = None
-    modifier: str | None = None
-    manner: str | None = None
-    quantity: str | None = None
-    qword: str | None = None
-    negation = False
-    aspect: str | None = None
-    modal: str | None = None
-    question: str | None = (
-        "yesno" if (punctuation and punctuation in "?？") or text.endswith(("吗", "呢")) else None
-    )
-    intensity = 0
+    question = "yesno" if punctuation in "?？" else None
+    pending_place = False
+    pending_partner = False
+    pending_mods: list[str] = []
     copula = False
-    have = False
-    prep: str | None = None
-    has_de = "的" in tokens
-    subject_index: int | None = None
-    adj_index: int | None = None
-    unknown: list[str] = []
 
-    def set_subject(token: str, index: int) -> None:
-        nonlocal subject, subject_index
-        subject = token
-        subject_index = index
+    def next_role(i: int) -> str | None:
+        j = i + 1
+        while j < len(tagged) and tagged[j][1] in {"stop", "intensity"} and tagged[j][0] != "的":
+            j += 1
+        if j < len(tagged) and tagged[j][0] == "的":
+            return "de"
+        return tagged[j][1] if j < len(tagged) else None
 
-    def set_object(token: str) -> None:
-        nonlocal obj, place
-        if prep is not None and place is None:
-            place = token
-        elif obj is None:
-            obj = token
-        elif place is None:
-            place = token
+    last_np: list[NounPhrase] = []
+
+    def add_np(head: str) -> None:
+        nonlocal pending_place, pending_partner, pending_mods
+        np = NounPhrase(head, pending_mods)
+        pending_mods = []
+        last_np[:] = [np]
+        if pending_place:
+            frame.place = np
+            pending_place = False
+        elif pending_partner:
+            frame.partner = np
+            pending_partner = False
+        elif not frame.verbs and frame.subject is None and not copula:
+            frame.subject = np
+        elif frame.verbs and _duck(frame.verbs[-1], lexicon) in GO_VERBS and frame.place is None:
+            frame.place = np
         else:
-            unknown.append(token)
+            frame.objects.append(np)
 
-    i = 0
-    while i < len(tagged):
-        token, role = tagged[i]
-        nxt = tagged[i + 1] if i + 1 < len(tagged) else None
-
-        if token == "好" and nxt and nxt[1] == "stative":
-            intensity = max(intensity, 1)
-            i += 1
-            continue
-
-        if role in {"pron", "noun"}:
-            if subject is None and verb is None and not copula and not have:
-                set_subject(token, i)
-            else:
-                set_object(token)
-        elif role in {"num", "quant"}:
-            quantity = token
-        elif role == "measure":
-            pass
-        elif role == "neg":
-            negation = True
-            if token == "没" and nxt and nxt[1] in {"verb", "modal"}:
-                aspect = "perf"
-        elif role == "neg_have":
-            negation = True
-            if nxt and nxt[1] in {"verb", "modal", "modal_or_fut"}:
-                aspect = "perf"
-            else:
-                have = True
-        elif role == "neg_modal":
-            negation = True
-            modal = "能"
-        elif role == "perf":
-            aspect = "perf"
-        elif role == "fut":
-            aspect = "fut"
-        elif role == "want_or_fut":
-            if nxt and nxt[1] in {"verb", "modal", "modal_or_fut"}:
-                aspect = "fut"
-            elif nxt and nxt[1] in {"noun", "pron", "q", "unknown"}:
-                verb = token
-            else:
-                verb = token
-        elif role == "modal_or_fut":
-            if any(r == "fut" for _, r in tagged):
-                aspect = "fut"
-            else:
-                modal = token
-        elif role == "modal":
-            modal = token
-        elif role == "verb":
-            if verb is None:
-                verb = token
-            elif complement_verb is None:
-                complement_verb = token
-            else:
-                unknown.append(token)
-        elif role == "stative":
-            if adjective is None:
-                adjective = token
-                adj_index = i
-            elif modifier is None and obj is None:
-                modifier = token
-            else:
-                unknown.append(token)
+    for i, (token, role) in enumerate(tagged):
+        nxt = next_role(i)
+        if role == "time":
+            frame.time = token
+        elif role == "noun":
+            add_np(token)
         elif role == "q":
-            qword = token
             question = "wh"
-            duck = _duck_of(token, lexicon)
-            if duck in {"ʔa-ki", "ʔa-ʔo"}:
-                if place is None:
-                    place = token
-            elif duck == "ʔa-ba":
-                manner = token
-            elif duck == "ʔa-ʔok":
-                quantity = token
+            add_np(token)
+        elif role == "unknown":
+            frame.unknown.append(token)
+            add_np(token)
+        elif role == "one":
+            pass
+        elif role == "many":
+            pending_mods.append("多")
+        elif role == "plural":
+            if last_np and "多" not in last_np[0].modifiers:
+                last_np[0].modifiers.append("多")
+        elif role == "neg":
+            frame.negation = True
+            if token in {"没", "没有"}:
+                if nxt in {"verb", "want"}:
+                    frame.aspect = "perf"
+                elif token == "没有":
+                    frame.verbs.append("有")
+        elif role == "qparticle":
+            question = question or "yesno"
+        elif role == "perf":
+            frame.aspect = "perf"
+        elif role == "fut":
+            frame.aspect = "fut"
+        elif role == "want":
+            following = tagged[i + 1][0] if i + 1 < len(tagged) else None
+            if following in WEATHER:
+                frame.aspect = "fut"
             else:
-                if obj is None:
-                    obj = token
-        elif role == "particle":
-            if token in QUESTION_PARTICLES:
-                question = question or "yesno"
+                frame.verbs.append(token)
         elif role == "copula":
             copula = True
-        elif role == "have":
-            have = True
         elif role == "prep":
-            prep = token
+            if nxt in {"noun", "q", "unknown"}:
+                pending_place = True
+        elif role == "partner":
+            if frame.subject is not None and not frame.verbs:
+                pending_partner = True
         elif role == "intensity":
-            intensity = max(intensity, 2 if token in {"太", "非常", "特别", "十分"} else 1)
-        elif role in {"interj", "stop"}:
-            pass
-        elif role == "unknown":
-            unknown.append(token)
-            if verb is not None and obj is None:
-                obj = token
-            elif subject is None and not copula and not have:
-                set_subject(token, i)
-            elif obj is None:
-                obj = token
-        i += 1
+            frame.intensity = max(frame.intensity, 2 if token in STRONG_INTENS else 1)
+        elif role == "verb":
+            frame.verbs.append(token)
+        elif role == "stative":
+            if token == "好" and nxt == "stative":
+                frame.intensity = max(frame.intensity, 1)
+            elif nxt in {"de", "noun", "unknown"} and not (nxt == "de" and i + 2 >= len(tagged)):
+                pending_mods.append(token)
+            elif nxt in {"verb", "want"} and frame.manner is None:
+                frame.manner = token
+            elif frame.verbs and frame.objects:
+                frame.objects[-1].modifiers.append(token)
+            elif frame.predicate is None:
+                frame.predicate = token
+            else:
+                frame.dropped.append(token)
+        # stop 词直接吞掉
 
-    if have and adjective is not None and obj is None:
-        obj = adjective
-        adjective = None
+    if pending_mods:
+        if frame.predicate is None and not frame.verbs:
+            frame.predicate = pending_mods.pop(0)
+        frame.dropped.extend(pending_mods)
 
-    if is_go(verb, lexicon) and obj is not None and is_place(obj, lexicon):
-        place = obj
-        obj = None
-    if is_go(complement_verb, lexicon) and obj is not None and is_place(obj, lexicon):
-        place = obj
-        obj = None
-
-    frame.subject = subject
-    frame.object = obj
-    frame.place = place
-    frame.verb = verb
-    frame.complement_verb = complement_verb
-    frame.adjective = adjective
-    frame.modifier = modifier
-    frame.manner = manner
-    frame.quantity = quantity
-    frame.negation = negation
-    frame.aspect = aspect
-    frame.modal = modal
+    # "是" 后面只有形容词：天空是蓝的 -> 形容词谓语
+    if copula and frame.predicate is None and frame.objects:
+        frame.verbs.append("是")
     frame.question = question
-    frame.intensity = intensity
-    frame.copula = copula
-    frame.have = have
-    frame.unknown = unknown
 
-    if copula and has_de and subject is not None and obj is not None and place is not None:
-        frame.kind = "equative"
-        frame.subject_parts = [subject, obj]
-        frame.subject = None
-        frame.object = place
-        frame.place = None
-    elif have:
-        if is_place(subject, lexicon):
-            frame.kind = "exist_place"
-            frame.place = subject
-            frame.subject = None
-        else:
-            frame.kind = "possess"
-    elif copula:
-        frame.kind = "stative" if adjective is not None and obj is None else "equative"
-    elif adjective is not None and verb is None:
-        if (
-            subject is not None
-            and adj_index is not None
-            and subject_index is not None
-            and adj_index < subject_index
-            and not negation
-            and aspect is None
-        ):
-            frame.kind = "noun_phrase"
-            frame.modifier = adjective
-            frame.object = subject
-            frame.subject = None
-            frame.adjective = None
-        else:
-            frame.kind = "stative"
-    elif verb is not None:
-        frame.kind = "transitive" if obj is not None else "intransitive"
-    elif subject is not None and place is not None and adjective is None:
-        frame.kind = "locative"
-    elif subject is not None and obj is not None:
-        frame.kind = "possessive" if has_de else "equative"
-    elif subject is not None:
-        frame.kind = "fragment"
-        frame.raw = [subject]
-    elif adjective is not None:
+    if frame.verbs:
+        frame.kind = "verbal"
+    elif frame.predicate is not None:
         frame.kind = "stative"
-    elif qword is not None:
-        frame.kind = "wh_fragment"
-        frame.raw = [qword]
-    elif quantity is not None:
-        frame.kind = "fragment"
-    elif unknown:
-        frame.kind = "unknown_fragment"
-        frame.raw = unknown
+        if frame.aspect == "perf":
+            frame.aspect = None  # 状态变化的"了"不译
+    elif frame.place is not None:
+        frame.kind = "locative"
+    elif frame.subject is not None or frame.objects:
+        frame.kind = "nominal"
     else:
-        frame.kind = "fragment"
+        frame.kind = "empty" if not frame.time else "nominal"
 
     frame.emotion = detect_emotion(text, punctuation, question is not None)
     return frame
